@@ -1210,15 +1210,23 @@ const safeProviders: SafeProvider[] = [
       stateProvider: StateProvider,
       organizationService: OrganizationServiceAbstraction,
       accountService: AccountServiceAbstraction,
+      newPolicyService: InternalNewPolicyService,
       injector: Injector,
     ) =>
       new DefaultPolicyService(
         stateProvider,
         organizationService,
         accountService,
-        () => injector.get(SdkService),
+        newPolicyService,
+        () => injector.get(ConfigService),
       ),
-    deps: [StateProvider, OrganizationServiceAbstraction, AccountServiceAbstraction, Injector],
+    deps: [
+      StateProvider,
+      OrganizationServiceAbstraction,
+      AccountServiceAbstraction,
+      InternalNewPolicyService,
+      Injector,
+    ],
   }),
   safeProvider({
     provide: PolicyServiceAbstraction,
@@ -1226,8 +1234,17 @@ const safeProviders: SafeProvider[] = [
   }),
   safeProvider({
     provide: InternalNewPolicyService,
-    useClass: DefaultNewPolicyService,
-    deps: [StateProvider],
+    useFactory: (
+      stateProvider: StateProvider,
+      organizationService: OrganizationServiceAbstraction,
+      injector: Injector,
+    ) =>
+      new DefaultNewPolicyService(
+        stateProvider,
+        () => injector.get(SdkService),
+        organizationService,
+      ),
+    deps: [StateProvider, OrganizationServiceAbstraction, Injector],
   }),
   safeProvider({
     provide: PolicyApiServiceAbstraction,
