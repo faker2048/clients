@@ -18,7 +18,11 @@ import {
   EncString,
 } from "@bitwarden/common/key-management/crypto/models/enc-string";
 import { MasterPasswordServiceAbstraction } from "@bitwarden/common/key-management/master-password/abstractions/master-password.service.abstraction";
-import { MasterPasswordSalt } from "@bitwarden/common/key-management/master-password/types/master-password.types";
+import {
+  MasterPasswordAuthenticationData,
+  MasterPasswordSalt,
+  MasterPasswordUnlockData,
+} from "@bitwarden/common/key-management/master-password/types/master-password.types";
 import { I18nService } from "@bitwarden/common/platform/abstractions/i18n.service";
 import { Utils } from "@bitwarden/common/platform/misc/utils";
 import { OrganizationId, UserId } from "@bitwarden/common/types/guid";
@@ -106,43 +110,21 @@ export class OrganizationUserResetPasswordService implements UserKeyRotationKeyR
    * and/or two-step login.
    */
   async recoverAccount(request: RecoverAccountRequest): Promise<void> {
-    let newMasterPasswordHash: string | undefined;
-    let key: string | undefined;
+    const passwordData = request.resetMasterPassword
+      ? await this.makeAuthAndUnlockData(request)
+      : undefined;
 
-    if (request.resetMasterPassword) {
-      const resetPasswordDetails =
-        await this.organizationUserApiService.getOrganizationUserResetPasswordDetails(
-          request.organizationId,
-          request.organizationUserId,
-        );
-
-      if (resetPasswordDetails == null) {
-        throw new Error(this.i18nService.t("resetPasswordDetailsError"));
-      }
-
-      const kdfConfig = this.buildKdfConfig(resetPasswordDetails);
-      const existingUserKey = await this.decryptUserKey(
-        resetPasswordDetails,
-        request.organizationId,
-      );
-
-      ({ newMasterPasswordHash, key } = await this.buildResetPasswordRequest(
-        request.newMasterPassword,
-        request.email,
-        kdfConfig,
-        existingUserKey,
-      ));
-    }
+    const organizationUserResetPasswordRequest = new OrganizationUserResetPasswordRequest(
+      request.resetMasterPassword,
+      request.resetTwoFactor,
+      passwordData?.authenticationData,
+      passwordData?.unlockData,
+    );
 
     await this.organizationUserApiService.putOrganizationUserRecoverAccount(
       request.organizationId,
       request.organizationUserId,
-      new OrganizationUserResetPasswordRequest(
-        request.resetMasterPassword,
-        request.resetTwoFactor,
-        newMasterPasswordHash,
-        key,
-      ),
+      organizationUserResetPasswordRequest,
     );
   }
 
@@ -266,36 +248,44 @@ export class OrganizationUserResetPasswordService implements UserKeyRotationKeyR
     )) as UserKey;
   }
 
-  private async buildResetPasswordRequest(
-    newMasterPassword: string,
-    email: string,
-    kdfConfig: KdfConfig,
-    existingUserKey: UserKey,
-  ): Promise<Pick<OrganizationUserResetPasswordRequest, "newMasterPasswordHash" | "key">> {
+  private async makeAuthAndUnlockData(request: RecoverAccountRequest): Promise<{
+    authenticationData: MasterPasswordAuthenticationData;
+    unlockData: MasterPasswordUnlockData;
+  }> {
+    const resetPasswordDetails =
+      await this.organizationUserApiService.getOrganizationUserResetPasswordDetails(
+        request.organizationId,
+        request.organizationUserId,
+      );
+
+    if (resetPasswordDetails == null) {
+      throw new Error(this.i18nService.t("resetPasswordDetailsError"));
+    }
+
+    const kdfConfig = this.buildKdfConfig(resetPasswordDetails);
+    const existingUserKey = await this.decryptUserKey(resetPasswordDetails, request.organizationId);
+
     // In the Account Recovery flow, the target user's UserId is not available (only orgUserId),
     // so salt is always derived from the target user's email via emailToSalt().
     //
     // TODO: PM-32059 — When salt is disconnected from email (Stage 3), this will need
     // a server-provided salt for the target user rather than email derivation.
-    const salt: MasterPasswordSalt = this.masterPasswordService.emailToSalt(email);
+    const salt: MasterPasswordSalt = this.masterPasswordService.emailToSalt(request.email);
 
     const authenticationData =
       await this.masterPasswordService.makeMasterPasswordAuthenticationData(
-        newMasterPassword,
+        request.newMasterPassword,
         kdfConfig,
         salt,
       );
 
     const unlockData = await this.masterPasswordService.makeMasterPasswordUnlockData(
-      newMasterPassword,
+      request.newMasterPassword,
       kdfConfig,
       salt,
       existingUserKey,
     );
 
-    return {
-      newMasterPasswordHash: authenticationData.masterPasswordAuthenticationHash,
-      key: unlockData.masterKeyWrappedUserKey,
-    };
+    return { authenticationData, unlockData };
   }
 }
