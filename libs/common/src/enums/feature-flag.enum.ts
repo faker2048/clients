@@ -40,7 +40,6 @@ export enum FeatureFlag {
   /* Billing */
   PM29108_EnablePersonalDiscounts = "pm-29108-enable-personal-discounts",
   PM24032_NewNavigationPremiumUpgradeButton = "pm-24032-new-navigation-premium-upgrade-button",
-  PM23713_PremiumBadgeOpensNewPremiumUpgradeDialog = "pm-23713-premium-badge-opens-new-premium-upgrade-dialog",
 
   PM29593_PremiumToOrganizationUpgrade = "pm-29593-premium-to-organization-upgrade",
 
@@ -79,6 +78,7 @@ export enum FeatureFlag {
   CipherKeyEncryption = "cipher-key-encryption",
   MigrateMyVaultToMyItems = "pm-20558-migrate-myvault-to-myitems",
   PM27632_SdkCipherCrudOperations = "pm-27632-cipher-crud-operations-to-sdk",
+  PM28191CipherAdminOpsToSdk = "pm-28191-cipher-admin-ops-to-sdk",
   PM28192_CipherAttachmentOpsToSdk = "pm-28192-cipher-attachment-ops-to-sdk",
   PM30521_AutofillButtonViewLoginScreen = "pm-30521-autofill-button-view-login-screen",
   PM29438_WelcomeDialogWithExtensionPrompt = "pm-29438-welcome-dialog-with-extension-prompt",
@@ -153,6 +153,7 @@ export const DefaultFeatureFlagValue = {
   [FeatureFlag.CipherKeyEncryption]: FALSE,
   [FeatureFlag.PM22134SdkCipherListView]: FALSE,
   [FeatureFlag.PM27632_SdkCipherCrudOperations]: FALSE,
+  [FeatureFlag.PM28191CipherAdminOpsToSdk]: FALSE,
   [FeatureFlag.PM28190CipherSharingOpsToSdk]: FALSE,
   [FeatureFlag.PM28192_CipherAttachmentOpsToSdk]: FALSE,
   [FeatureFlag.MigrateMyVaultToMyItems]: FALSE,
@@ -177,7 +178,6 @@ export const DefaultFeatureFlagValue = {
   /* Billing */
   [FeatureFlag.PM29108_EnablePersonalDiscounts]: FALSE,
   [FeatureFlag.PM24032_NewNavigationPremiumUpgradeButton]: FALSE,
-  [FeatureFlag.PM23713_PremiumBadgeOpensNewPremiumUpgradeDialog]: FALSE,
 
   [FeatureFlag.PM29593_PremiumToOrganizationUpgrade]: FALSE,
 
