@@ -673,6 +673,27 @@
   "passportNumber": {
     "message": "Номер на паспорта"
   },
+  "sex": {
+    "message": "Пол"
+  },
+  "copySex": {
+    "message": "Копиране на пола"
+  },
+  "birthPlace": {
+    "message": "Място на раждане"
+  },
+  "nationality": {
+    "message": "Националност"
+  },
+  "copyNationality": {
+    "message": "Копиране на националността"
+  },
+  "passportType": {
+    "message": "Вид на паспорта"
+  },
+  "nationalIdentificationNumber": {
+    "message": "Национален идентификационен номер"
+  },
   "licenseNumber": {
     "message": "Номер на лиценза"
   },
@@ -1021,6 +1042,18 @@
   "typeBankAccountSubtitle": {
     "message": "Банкови данни"
   },
+  "typePassport": {
+    "message": "Паспорт"
+  },
+  "passportDetails": {
+    "message": "Подробности за паспорта"
+  },
+  "passportAdded": {
+    "message": "Паспортът е добавен"
+  },
+  "typePassportSubtitle": {
+    "message": "Пътен документ"
+  },
   "folderSubtitle": {
     "message": "Организирайте данните си"
   },
@@ -1308,6 +1341,9 @@
   "copyAddress": {
     "message": "Копиране на адреса"
   },
+  "copyBirthPlace": {
+    "message": "Копиране на мястото на раждане"
+  },
   "copyPhone": {
     "message": "Копиране на телефона"
   },
@@ -1322,6 +1358,12 @@
   },
   "copyPassportNumber": {
     "message": "Копиране на номера на паспорта"
+  },
+  "copyNationalIdentificationNumber": {
+    "message": "Копиране на националния идентификационен номер"
+  },
+  "copyPassportType": {
+    "message": "Копиране на вида на паспорта"
   },
   "copyFirstName": {
     "message": "Копиране на първото име"
@@ -1343,6 +1385,12 @@
   },
   "copyFingerprint": {
     "message": "Копиране на отпечатъка"
+  },
+  "copyIssuingAuthority": {
+    "message": "Копиране на институцията/офиса издател"
+  },
+  "copyIssuingCountry": {
+    "message": "Копиране на страната издател"
   },
   "copyName": {
     "message": "Копиране на името"
@@ -1383,6 +1431,10 @@
         "example": "Secret Note Item"
       }
     }
+  },
+  "noValueEntered": {
+    "message": "Няма въведена стойност",
+    "description": "Screen reader announcement appended to a custom field's name when the field has no value entered."
   },
   "noValuesToCopy": {
     "message": "Няма стойности за копиране"
@@ -4274,6 +4326,29 @@
       }
     }
   },
+  "createdTextSend": {
+    "message": "Създадено текстово изпращане"
+  },
+  "createdTextSendWithEmailVerification": {
+    "message": "Създадено текстово изпращане с потвърждение на е-пощата",
+    "description": "'Send' is a noun and the name of a feature called 'Bitwarden Send'. It should not be translated."
+  },
+  "createdTextSendWithPasswordProtection": {
+    "message": "Създадено текстово изпращане с парола",
+    "description": "'Send' is a noun and the name of a feature called 'Bitwarden Send'. It should not be translated."
+  },
+  "createdFileSend": {
+    "message": "Създадено файлово изпращане",
+    "description": "'Send' is a noun and the name of a feature called 'Bitwarden Send'. It should not be translated."
+  },
+  "createdFileSendWithEmailVerification": {
+    "message": "Създадено файлово изпращане с потвърждение на е-пощата",
+    "description": "'Send' is a noun and the name of a feature called 'Bitwarden Send'. It should not be translated."
+  },
+  "createdFileSendWithPasswordProtection": {
+    "message": "Създадено файлово изпращане с парола",
+    "description": "'Send' is a noun and the name of a feature called 'Bitwarden Send'. It should not be translated."
+  },
   "movedItemIdToOrg": {
     "message": "Записът $ID$ беше преместен в организация.",
     "placeholders": {
@@ -4408,6 +4483,24 @@
   },
   "copiedBankAccountPinItemId": {
     "message": "ПИН на запис $ID$ е копиран.",
+    "placeholders": {
+      "id": {
+        "content": "$1",
+        "example": "Google"
+      }
+    }
+  },
+  "copiedPassportNumberItemId": {
+    "message": "Номерът на паспорта от запис $ID$ е копиран.",
+    "placeholders": {
+      "id": {
+        "content": "$1",
+        "example": "Google"
+      }
+    }
+  },
+  "viewedPassportNumberItemId": {
+    "message": "Номерът на паспорта от запис $ID$ е прегледан.",
     "placeholders": {
       "id": {
         "content": "$1",
@@ -4562,8 +4655,8 @@
   "revokedEmailError": {
     "message": "1 или повече е-пощи принадлежат на членове с преустановен достъп. Възстановете достъпа им, за да ги поканите отново."
   },
-  "revocationReasonUnknown": {
-    "message": "Неизвестна причина"
+  "revocationReasonNotLogged": {
+    "message": "Няма записана причина"
   },
   "revocationReasonManual": {
     "message": "Отнето от администратор"
@@ -4573,6 +4666,9 @@
   },
   "revocationReasonSingleOrganizationNonCompliance": {
     "message": "Несъответствие с политиката за единствена организация"
+  },
+  "revocationReasonDeclinedItemTransfer": {
+    "message": "Отказано прехвърляне на елементите към организацията"
   },
   "revokedUserIdTwoFactorNonCompliance": {
     "message": "Достъпът до организацията е отнет от $ID$, поради несъответствие с политиката за двустепенно удостоверяване на организацията.",
@@ -4648,9 +4744,6 @@
   },
   "userAcceptedTransfer": {
     "message": "Прието прехвърляне на собствеността към организацията."
-  },
-  "userDeclinedTransfer": {
-    "message": "Премахнато, поради отказ от прехвърляне на собствеността към организацията."
   },
   "invitedUserId": {
     "message": "Потребител № $ID$ е поканен.",
@@ -13664,6 +13757,9 @@
   "searchBankAccount": {
     "message": "Търсене на банкова сметка"
   },
+  "searchPassport": {
+    "message": "Търсене в паспортите"
+  },
   "copyAccountNumber": {
     "message": "Копиране на номера на сметката"
   },
@@ -13819,6 +13915,9 @@
   "progressBar": {
     "message": "Лента за напредък",
     "description": "This is the name of a page component that displays progress to the user. This string will be used to label the progress bar for a screenreader when multiple progress bars are on a page, like 'Progress bar 1' and 'Progress bar 2'."
+  },
+  "errorImportingMyItemsMultiCollection": {
+    "message": "Не можете да внесете елементи, които са част от множество колекции, в „Моите елементи“"
   },
   "searchDriversLicense": {
     "message": "Търсене на лицензи"

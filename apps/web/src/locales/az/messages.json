@@ -673,8 +673,29 @@
   "passportNumber": {
     "message": "Pasport nömrəsi"
   },
+  "sex": {
+    "message": "Cinsi"
+  },
+  "copySex": {
+    "message": "Cinsi kopyala"
+  },
+  "birthPlace": {
+    "message": "Doğum yeri"
+  },
+  "nationality": {
+    "message": "Milliyəti"
+  },
+  "copyNationality": {
+    "message": "Milliyətini kopyala"
+  },
+  "passportType": {
+    "message": "Pasport növü"
+  },
+  "nationalIdentificationNumber": {
+    "message": "Şəxsiyyət vəsiqəsi nömrəsi"
+  },
   "licenseNumber": {
-    "message": "Lisenziya nömrəsi"
+    "message": "Sür. vəsiqəsi nömrəsi"
   },
   "email": {
     "message": "E-poçt"
@@ -998,10 +1019,10 @@
     "message": "SSH açarı"
   },
   "typeDriversLicense": {
-    "message": "License"
+    "message": "Sür. vəsiqəsi"
   },
   "typeDriversLicenseSubtitle": {
-    "message": "Drivers license or ID"
+    "message": "Sürücülük vəsiqəsi və ya kimlik"
   },
   "typeLoginSubtitle": {
     "message": "Veb sayt və ya tətbiq"
@@ -1020,6 +1041,18 @@
   },
   "typeBankAccountSubtitle": {
     "message": "Bank məlumatları"
+  },
+  "typePassport": {
+    "message": "Pasport"
+  },
+  "passportDetails": {
+    "message": "Pasport məlumatları"
+  },
+  "passportAdded": {
+    "message": "Pasport əlavə olundu"
+  },
+  "typePassportSubtitle": {
+    "message": "Səyahət sənədi"
   },
   "folderSubtitle": {
     "message": "Elementlərinizi təşkil edin"
@@ -1133,7 +1166,7 @@
     "description": "Header for new bank account item type"
   },
   "newItemHeaderDriversLicense": {
-    "message": "Yeni lisenziya",
+    "message": "Yeni sür. vəsiqəsi",
     "description": "Header for new license item type"
   },
   "newItemHeaderPassport": {
@@ -1141,11 +1174,11 @@
     "description": "Header for new passport item type"
   },
   "newItemHeaderTextSendV2": {
-    "message": "New text",
+    "message": "Yeni mətn",
     "description": "Header for new text send"
   },
   "newItemHeaderFileSendV2": {
-    "message": "New file",
+    "message": "Yeni fayl",
     "description": "Header for new file send"
   },
   "editItemHeaderLogin": {
@@ -1173,7 +1206,7 @@
     "description": "Header for edit bank account item type"
   },
   "editItemHeaderLicense": {
-    "message": "Edit license",
+    "message": "Sür. vəsiqəsinə düzəliş",
     "description": "Header for edit license item type"
   },
   "editItemHeaderPassport": {
@@ -1181,11 +1214,11 @@
     "description": "Header for edit passport item type"
   },
   "editItemHeaderTextSendV2": {
-    "message": "Edit text",
+    "message": "Mətnə düzəliş",
     "description": "Header for edit text send"
   },
   "editItemHeaderFileSendV2": {
-    "message": "Edit file",
+    "message": "Fayla düzəliş",
     "description": "Header for edit file send"
   },
   "viewItemHeaderLogin": {
@@ -1213,7 +1246,7 @@
     "description": "Header for view bank account item type"
   },
   "viewItemHeaderLicense": {
-    "message": "View license",
+    "message": "Sür. vəsiqəsinə bax",
     "description": "Header for view license item type"
   },
   "viewItemHeaderPassport": {
@@ -1308,6 +1341,9 @@
   "copyAddress": {
     "message": "Ünvanı kopyala"
   },
+  "copyBirthPlace": {
+    "message": "Doğum yerini kopyala"
+  },
   "copyPhone": {
     "message": "Telefonu kopyala"
   },
@@ -1323,17 +1359,23 @@
   "copyPassportNumber": {
     "message": "Pasport nömrəsini kopyala"
   },
+  "copyNationalIdentificationNumber": {
+    "message": "Şəxsiyyət vəsiqəsi nömrəsini kopyala"
+  },
+  "copyPassportType": {
+    "message": "Pasport növünü kopyala"
+  },
   "copyFirstName": {
-    "message": "Copy first name"
+    "message": "Adı kopyala"
   },
   "copyMiddleName": {
-    "message": "Copy middle name"
+    "message": "Orta adı kopyala"
   },
   "copyLastName": {
-    "message": "Copy last name"
+    "message": "Soyadı kopyala"
   },
   "copyLicenseNumber": {
-    "message": "Lisenziya nömrəsini kopyala"
+    "message": "Sür. vəsiqəsi nömrəsini kopyala"
   },
   "copyPrivateKey": {
     "message": "Private açarı kopyala"
@@ -1343,6 +1385,12 @@
   },
   "copyFingerprint": {
     "message": "Barmaq izini kopyala"
+  },
+  "copyIssuingAuthority": {
+    "message": "Təqdim edən orqanı/ofisi kopyala"
+  },
+  "copyIssuingCountry": {
+    "message": "Təqdim edən ölkəni kopyala"
   },
   "copyName": {
     "message": "Adı kopyala"
@@ -1383,6 +1431,10 @@
         "example": "Secret Note Item"
       }
     }
+  },
+  "noValueEntered": {
+    "message": "Heç bir dəyər daxil edilməyib",
+    "description": "Screen reader announcement appended to a custom field's name when the field has no value entered."
   },
   "noValuesToCopy": {
     "message": "Kopyalanacaq dəyər yoxdur"
@@ -2271,10 +2323,10 @@
     "message": "Seyf verilərinizi xaricə köçürərkən bir xəta baş verdi"
   },
   "exportSuccessSkippedAttachment": {
-    "message": "1 corrupted attachment was skipped during export. All other vault data and attachments exported successfully."
+    "message": "Xaricə köçürmə zamanı 1 zədəli qoşma ötürüldü. Digər bütün seyf veriləri və qoşmaları uğurla xaricə köçürüldü."
   },
   "exportSuccessSkippedAttachments": {
-    "message": "$COUNT$ corrupted attachments were skipped during export. All other vault data and attachments exported successfully.",
+    "message": "Xaricə köçürmə zamanı $COUNT$ zədəli qoşma ötürüldü. Digər bütün seyf veriləri və qoşmaları uğurla xaricə köçürüldü.",
     "placeholders": {
       "count": {
         "content": "$1",
@@ -3563,13 +3615,13 @@
     "message": "Endirimin müddəti bitdi. Lütfən səbətin cəmini yoxlayıb yenidən sınayın."
   },
   "downloadLicense": {
-    "message": "Lisenziyanı endir"
+    "message": "Sür. vəsiqəsini endir"
   },
   "viewBillingToken": {
     "message": "Faktura tokeninə bax"
   },
   "updateLicense": {
-    "message": "Lisenziyanı güncəllə"
+    "message": "Sür. vəsiqəsini güncəllə"
   },
   "manageSubscription": {
     "message": "Abunəliyi idarə et"
@@ -3689,7 +3741,7 @@
     "message": "Premium satın al"
   },
   "licenseFile": {
-    "message": "Lisenziya faylı"
+    "message": "Sür. vəsiqəsi faylı"
   },
   "licenseFileDesc": {
     "message": "Lisenziya faylınız $FILE_NAME$ adına bənzər adlandırılacaq",
@@ -4274,6 +4326,29 @@
       }
     }
   },
+  "createdTextSend": {
+    "message": "Mətn \"Send\"i yaradıldı"
+  },
+  "createdTextSendWithEmailVerification": {
+    "message": "E-poçt doğrulaması olan mətn \"Send\"i yaradıldı",
+    "description": "'Send' is a noun and the name of a feature called 'Bitwarden Send'. It should not be translated."
+  },
+  "createdTextSendWithPasswordProtection": {
+    "message": "Parola sahib mətn \"Send\"i yaradıldı",
+    "description": "'Send' is a noun and the name of a feature called 'Bitwarden Send'. It should not be translated."
+  },
+  "createdFileSend": {
+    "message": "Fayl \"Send\"i yaradıldı",
+    "description": "'Send' is a noun and the name of a feature called 'Bitwarden Send'. It should not be translated."
+  },
+  "createdFileSendWithEmailVerification": {
+    "message": "E-poçt doğrulaması olan fayl \"Send\"i yaradıldı",
+    "description": "'Send' is a noun and the name of a feature called 'Bitwarden Send'. It should not be translated."
+  },
+  "createdFileSendWithPasswordProtection": {
+    "message": "Parola sahib fayl \"Send\"i yaradıldı",
+    "description": "'Send' is a noun and the name of a feature called 'Bitwarden Send'. It should not be translated."
+  },
   "movedItemIdToOrg": {
     "message": "$ID$ elementi bir təşkilata daşındı.",
     "placeholders": {
@@ -4415,8 +4490,26 @@
       }
     }
   },
+  "copiedPassportNumberItemId": {
+    "message": "$ID$ elementinin pasport nömrəsi kopyalandı.",
+    "placeholders": {
+      "id": {
+        "content": "$1",
+        "example": "Google"
+      }
+    }
+  },
+  "viewedPassportNumberItemId": {
+    "message": "$ID$ elementinin pasport nömrəsinə baxıldı.",
+    "placeholders": {
+      "id": {
+        "content": "$1",
+        "example": "Google"
+      }
+    }
+  },
   "viewedLicenseNumberItemId": {
-    "message": "Viewed license number for item $ID$.",
+    "message": "$ID$ elementinin sürücülük vəsiqəsi nömrəsinə baxıldı.",
     "placeholders": {
       "id": {
         "content": "$1",
@@ -4425,7 +4518,7 @@
     }
   },
   "copiedLicenseNumberItemId": {
-    "message": "Copied license number for item $ID$.",
+    "message": "$ID$ elementinin sürücülük vəsiqəsi nömrəsi kopyalandı.",
     "placeholders": {
       "id": {
         "content": "$1",
@@ -4562,8 +4655,8 @@
   "revokedEmailError": {
     "message": "1 və ya daha çox e-poçt, ləğv edilmiş üzvlərə aiddir. Erişimini bərpa etmək üçün təkrar dəvət edin."
   },
-  "revocationReasonUnknown": {
-    "message": "Bilinməyən səbəb"
+  "revocationReasonNotLogged": {
+    "message": "Heç bir səbəb qeyd olunmayıb"
   },
   "revocationReasonManual": {
     "message": "Admin tərəfindən ləğv edildi"
@@ -4573,6 +4666,9 @@
   },
   "revocationReasonSingleOrganizationNonCompliance": {
     "message": "Vahid təşkilat siyasətinə riayət etmir"
+  },
+  "revocationReasonDeclinedItemTransfer": {
+    "message": "Elementin təşkilata transferinə rədd cavabı verildi"
   },
   "revokedUserIdTwoFactorNonCompliance": {
     "message": "İki faktorlu təşkilat siyasətinə riayət etmədiyinə görə $ID$ üçün təşkilata erişimi ləğv edildi.",
@@ -4648,9 +4744,6 @@
   },
   "userAcceptedTransfer": {
     "message": "Təşkilatın sahibliyinə ötürülmə qəbul edildi."
-  },
-  "userDeclinedTransfer": {
-    "message": "Təşkilatın sahibliyinə ötürülməyə rədd cavabı verildiyi üçün ləğv edildi."
   },
   "invitedUserId": {
     "message": "$ID$ istifadəçisi dəvət edildi.",
@@ -4984,7 +5077,7 @@
     "message": "Hesabatı işə sal"
   },
   "goToAccessIntelligence": {
-    "message": "Go to Access Intelligence"
+    "message": "\"Access Intelligence\"ə get"
   },
   "updateBrowserDesc": {
     "message": "Dəstəklənməyən bir veb brauzer istifadə edirsiniz. Veb seyf düzgün işləməyə bilər."
@@ -5508,22 +5601,22 @@
     "message": "Keçidlə"
   },
   "allowedDomains": {
-    "message": "Allowed domains"
+    "message": "İcazəli domenlər"
   },
   "allowedDomainsHint": {
-    "message": "If entering multiple domains, separate with commas"
+    "message": "Birdən çox domen daxil etsəniz, vergüllə ayırın"
   },
   "enterAllowedDomainsToGenerateInviteLink": {
-    "message": "Enter allowed domains to generate an invite link"
+    "message": "Dəvət keçidi yaratmaq üçün icazəli domenləri daxil edin"
   },
   "domainsEdited": {
-    "message": "Domains edited"
+    "message": "Düzəliş olunan domenlər"
   },
   "inviteLink": {
-    "message": "Invite link"
+    "message": "Dəvət keçidi"
   },
   "lastGenerated": {
-    "message": "Last generated: $DATE$",
+    "message": "Son yaradılma: $DATE$",
     "placeholders": {
       "date": {
         "content": "$1"
@@ -5531,16 +5624,16 @@
     }
   },
   "inviteLinkCopied": {
-    "message": "Invite link copied"
+    "message": "Dəvət keçidi kopyalandı"
   },
   "inviteLinkRegenerated": {
-    "message": "Invite link regenerated"
+    "message": "Dəvət keçidi yenidən yaradıldı"
   },
   "regenerateInviteLink": {
-    "message": "Regenerate invite link"
+    "message": "Dəvət keçidini yenidən yarat"
   },
   "inviteByLinkDesc": {
-    "message": "Invite members to your organization with a link. If no role has been specified yet, they’ll be added as a default user."
+    "message": "Üzvləri təşkilatınıza bir keçidlə dəvət edin. Heç bir rol qeyd olunmayıbsa, ilkin istifadəçi kimi əlavə ediləcəklər."
   },
   "byContinuingYouAgreeToThe": {
     "message": "Davam edərək, bunlarla razılaşırsınız"
@@ -6249,17 +6342,17 @@
     "message": "Qoşmaları endir"
   },
   "troubleshooting": {
-    "message": "Troubleshooting"
+    "message": "Problemlərin aradan qaldırılması"
   },
   "troubleshootingDiagnosticReport": {
-    "message": "Experiencing an issue? Download then share the diagnostic report with"
+    "message": "Çətinliyiniz var? Diaqnostika hesabatını endirib paylaşın"
   },
   "bitwardenSupport": {
-    "message": "Bitwarden support",
+    "message": "Bitwarden dəstək",
     "description": "Link text that follows the troubleshooting description sentence. 'Bitwarden' should not be translated."
   },
   "download": {
-    "message": "Download"
+    "message": "Endir"
   },
   "sendAccessPasswordTitle": {
     "message": "Bu Send-ə baxmaq üçün parolu daxil edin",
@@ -6972,7 +7065,7 @@
     }
   },
   "eventAccountRecoveryWithMasterPasswordInitiated": {
-    "message": "Account recovery with master password initiated for $ID$.",
+    "message": "$ID$ üçün ana parol ilə hesabın geri qaytarılması prosesi başladılıb.",
     "placeholders": {
       "id": {
         "content": "$1",
@@ -6981,7 +7074,7 @@
     }
   },
   "eventAccountRecoveryWithTwoStepLoginInitiated": {
-    "message": "Account recovery with two-step login initiated for $ID$.",
+    "message": "$ID$ üçün iki addımlı giriş ilə hesabın geri qaytarılması prosesi başladılıb.",
     "placeholders": {
       "id": {
         "content": "$1",
@@ -8143,10 +8236,10 @@
     "message": "Təşkilat seyfini xaricə köçürmə"
   },
   "exportingIndividualVaultScopeDescription": {
-    "message": "Only items in your individual vault will export."
+    "message": "Yalnız fərdi seyfinizdəki elementlər xaricə köçürüləcək."
   },
   "exportingOrganizationVaultScopeDescription": {
-    "message": "Only items associated with the $ORGANIZATION$ vault will export. Items in individual vaults will not.",
+    "message": "Yalnız $ORGANIZATION$ seyfi ilə əlaqələndirilmiş elementlər xaricə köçürüləcək. Fərdi seyfinizdə elementlər deyil.",
     "placeholders": {
       "organization": {
         "content": "$1",
@@ -8651,19 +8744,19 @@
     "message": "Giriş lazımdır."
   },
   "enterMonth": {
-    "message": "Enter month."
+    "message": "Ayı daxil edin."
   },
   "enterDay": {
-    "message": "Enter day."
+    "message": "Günü daxil edin."
   },
   "enterYear": {
-    "message": "Enter year."
+    "message": "İli daxil edin."
   },
   "invalidDay": {
-    "message": "Enter a valid day."
+    "message": "Yararlı bir gün daxil edin."
   },
   "invalidYear": {
-    "message": "Enter a valid year."
+    "message": "Yararlı bir il daxil edin."
   },
   "inputEmail": {
     "message": "Giriş, bir e-poçt ünvanı deyil."
@@ -9465,7 +9558,7 @@
     "message": "Üzv dəvət et"
   },
   "inviteMembers": {
-    "message": "Invite members"
+    "message": "Üzvləri dəvət et"
   },
   "addSponsorship": {
     "message": "Sponsorluq əlavə et"
@@ -10171,7 +10264,7 @@
     "message": "Hesabın geri qaytarılması uğurlu oldu!"
   },
   "userResetMasterPasswordThroughAccountRecovery": {
-    "message": "User reset their master password through account recovery."
+    "message": "İstifadəçi, hesabın geri qaytarılması vasitəsilə öz ana parolunu sıfırladı."
   },
   "activatedAccessToSecretsManager": {
     "message": "\"Sirr Meneceri\"nə erişim aktivləşdirildi",
@@ -13664,6 +13757,9 @@
   "searchBankAccount": {
     "message": "Bank hesabını axtar"
   },
+  "searchPassport": {
+    "message": "Pasport axtar"
+  },
   "copyAccountNumber": {
     "message": "Hesab nömrəsini kopyala"
   },
@@ -13782,26 +13878,26 @@
     "description": "'Send' is a noun and the name of a feature called 'Bitwarden Send'. It should not be translated."
   },
   "hideMyEmail": {
-    "message": "Hide my email address from recipients."
+    "message": "E-poçt ünvanımı alıcılardan gizlət."
   },
   "fileToShare": {
-    "message": "File to share"
+    "message": "Paylaşılacaq fayl"
   },
   "viewTextSendHeader": {
-    "message": "View text"
+    "message": "Mətnə bax"
   },
   "viewFileSendHeader": {
-    "message": "View file"
+    "message": "Fayla bax"
   },
   "sendCreated": {
-    "message": "Send created",
+    "message": "Send yaradıldı",
     "description": "'Send' is a noun and the name of a feature called 'Bitwarden Send'. It should not be translated."
   },
   "numericInputError": {
-    "message": "Input must be numeric"
+    "message": "Rəqəmsal daxil edin"
   },
   "integerInputError": {
-    "message": "Input must be a whole number"
+    "message": "Tam ədəd daxil edin"
   },
   "hideEmailPolicyInEffect": {
     "message": "Təşkilatınızın e-poçtun görünməsini tələb edir. Saxlamaq üçün \"E-poçtunuzu baxanlardan gizlədin\" seçimini ləğv edin."
@@ -13820,52 +13916,55 @@
     "message": "İrəliləyiş çubuğu",
     "description": "This is the name of a page component that displays progress to the user. This string will be used to label the progress bar for a screenreader when multiple progress bars are on a page, like 'Progress bar 1' and 'Progress bar 2'."
   },
+  "errorImportingMyItemsMultiCollection": {
+    "message": "Birdən çox kolleksiyanın parçası olan elementləri \"Elementlərim\"ə köçürə bilməzsiniz"
+  },
   "searchDriversLicense": {
-    "message": "Search licenses"
+    "message": "Sür. vəsiqəsi axtar"
   },
   "driversLicenseDetails": {
-    "message": "License details"
+    "message": "Sür. vəs. məlumatları"
   },
   "dateOfBirth": {
-    "message": "Date of birth"
+    "message": "Doğum tarixi"
   },
   "birthMonth": {
-    "message": "Birth month"
+    "message": "Doğum ayı"
   },
   "birthDay": {
-    "message": "Birth day"
+    "message": "Doğum günü"
   },
   "birthYear": {
-    "message": "Birth year"
+    "message": "Doğum ili"
   },
   "issuingCountry": {
-    "message": "Issuing country"
+    "message": "Təqdim edən ölkə"
   },
   "issuingState": {
-    "message": "Issuing state / province"
+    "message": "Təqdim edən ştat/əyalət"
   },
   "issueDate": {
-    "message": "Issue date"
+    "message": "Təqdim edilmə tarixi"
   },
   "issueMonth": {
-    "message": "Issue month"
+    "message": "Təqdim edilmə ayı"
   },
   "issueDay": {
-    "message": "Issue day"
+    "message": "Təqdim edilmə günü"
   },
   "issueYear": {
-    "message": "Issue year"
+    "message": "Təqdim edilmə ili"
   },
   "expirationDay": {
-    "message": "Expiration day"
+    "message": "Bitmə günü"
   },
   "issuingAuthority": {
-    "message": "Issuing authority"
+    "message": "Təqdim edən orqan"
   },
   "licenseClass": {
-    "message": "License class"
+    "message": "Sür. vəs. sinifi"
   },
   "copy": {
-    "message": "Copy"
+    "message": "Kopyala"
   }
 }

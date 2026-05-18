@@ -673,6 +673,27 @@
   "passportNumber": {
     "message": "Paspoortnummer"
   },
+  "sex": {
+    "message": "Geslacht"
+  },
+  "copySex": {
+    "message": "Geslacht kopiëren"
+  },
+  "birthPlace": {
+    "message": "Geboorteplaats"
+  },
+  "nationality": {
+    "message": "Nationaliteit"
+  },
+  "copyNationality": {
+    "message": "Nationaliteit kopiëren"
+  },
+  "passportType": {
+    "message": "Soort paspoort"
+  },
+  "nationalIdentificationNumber": {
+    "message": "Nationaal identificatienummer"
+  },
   "licenseNumber": {
     "message": "Licentienummer"
   },
@@ -1021,6 +1042,18 @@
   "typeBankAccountSubtitle": {
     "message": "Bankdetails"
   },
+  "typePassport": {
+    "message": "Paspoort"
+  },
+  "passportDetails": {
+    "message": "Paspoortgegevens"
+  },
+  "passportAdded": {
+    "message": "Paspoort toegevoegd"
+  },
+  "typePassportSubtitle": {
+    "message": "Reisdocument"
+  },
   "folderSubtitle": {
     "message": "Je items organiseren"
   },
@@ -1308,6 +1341,9 @@
   "copyAddress": {
     "message": "Adres kopiëren"
   },
+  "copyBirthPlace": {
+    "message": "Geboorteplaats kopiëren"
+  },
   "copyPhone": {
     "message": "Telefoonnummer kopiëren"
   },
@@ -1322,6 +1358,12 @@
   },
   "copyPassportNumber": {
     "message": "Paspoortnummer kopiëren"
+  },
+  "copyNationalIdentificationNumber": {
+    "message": "Nationaal identificatienummer kopiëren"
+  },
+  "copyPassportType": {
+    "message": "Soort paspoort kopiëren"
   },
   "copyFirstName": {
     "message": "Voornaam kopiëren"
@@ -1343,6 +1385,12 @@
   },
   "copyFingerprint": {
     "message": "Vingerafdruk kopiëren"
+  },
+  "copyIssuingAuthority": {
+    "message": "Autoriteit/kantoor van uitgifte kopiëren"
+  },
+  "copyIssuingCountry": {
+    "message": "Land van uitgifte kopiëren"
   },
   "copyName": {
     "message": "Naam kopiëren"
@@ -1383,6 +1431,10 @@
         "example": "Secret Note Item"
       }
     }
+  },
+  "noValueEntered": {
+    "message": "Geen waarde ingevoerd",
+    "description": "Screen reader announcement appended to a custom field's name when the field has no value entered."
   },
   "noValuesToCopy": {
     "message": "Geen waarden om te kopiëren"
@@ -4274,6 +4326,29 @@
       }
     }
   },
+  "createdTextSend": {
+    "message": "Nieuwe tekst-Send aangemaakt"
+  },
+  "createdTextSendWithEmailVerification": {
+    "message": "Tekst-Send met e-mailverificatie aangemaakt",
+    "description": "'Send' is a noun and the name of a feature called 'Bitwarden Send'. It should not be translated."
+  },
+  "createdTextSendWithPasswordProtection": {
+    "message": "Tekst-Send met wachtwoord aangemaakt",
+    "description": "'Send' is a noun and the name of a feature called 'Bitwarden Send'. It should not be translated."
+  },
+  "createdFileSend": {
+    "message": "Nieuwe bestand-Send aangemaakt",
+    "description": "'Send' is a noun and the name of a feature called 'Bitwarden Send'. It should not be translated."
+  },
+  "createdFileSendWithEmailVerification": {
+    "message": "Bestand-Send met e-mailverificatie aangemaakt",
+    "description": "'Send' is a noun and the name of a feature called 'Bitwarden Send'. It should not be translated."
+  },
+  "createdFileSendWithPasswordProtection": {
+    "message": "Bestand-Send met wachtwoord aangemaakt",
+    "description": "'Send' is a noun and the name of a feature called 'Bitwarden Send'. It should not be translated."
+  },
   "movedItemIdToOrg": {
     "message": "Item $ID$ naar een organisatie verplaatst.",
     "placeholders": {
@@ -4408,6 +4483,24 @@
   },
   "copiedBankAccountPinItemId": {
     "message": "PIN gekopieerd voor item $ID$.",
+    "placeholders": {
+      "id": {
+        "content": "$1",
+        "example": "Google"
+      }
+    }
+  },
+  "copiedPassportNumberItemId": {
+    "message": "Paspoortnummer gekopieerd voor item $ID$.",
+    "placeholders": {
+      "id": {
+        "content": "$1",
+        "example": "Google"
+      }
+    }
+  },
+  "viewedPassportNumberItemId": {
+    "message": "Paspoortnummer bekeken voor item $ID$.",
     "placeholders": {
       "id": {
         "content": "$1",
@@ -4562,8 +4655,8 @@
   "revokedEmailError": {
     "message": "1 of meer e-mails behoren tot ingetrokken leden. Herstel hun toegang voor heruitnodiging."
   },
-  "revocationReasonUnknown": {
-    "message": "Onbekende reden"
+  "revocationReasonNotLogged": {
+    "message": "Geen reden vastgelegd"
   },
   "revocationReasonManual": {
     "message": "Ingetrokken door een beheerder"
@@ -4573,6 +4666,9 @@
   },
   "revocationReasonSingleOrganizationNonCompliance": {
     "message": "Niet in overeenstemming met één organisatiebeleid"
+  },
+  "revocationReasonDeclinedItemTransfer": {
+    "message": "Verplaatsen van items naar organisatie geweigerd"
   },
   "revokedUserIdTwoFactorNonCompliance": {
     "message": "Toegang tot de organisatie ingetrokken voor $ID$ voor niet-naleving van het tweestapsorganisatiebeleid.",
@@ -4648,9 +4744,6 @@
   },
   "userAcceptedTransfer": {
     "message": "Overdracht naar organisatie-eigendom geaccepteerd."
-  },
-  "userDeclinedTransfer": {
-    "message": "Ingetrokken wegens afwijzen van overdracht naar organisatie-eigendom."
   },
   "invitedUserId": {
     "message": "Gebruiker uitgenodigd $ID$.",
@@ -13664,6 +13757,9 @@
   "searchBankAccount": {
     "message": "Bankrekening doorzoeken"
   },
+  "searchPassport": {
+    "message": "Paspoorten zoeken"
+  },
   "copyAccountNumber": {
     "message": "Rekeningnummer kopiëren"
   },
@@ -13819,6 +13915,9 @@
   "progressBar": {
     "message": "Voortgangsbalk",
     "description": "This is the name of a page component that displays progress to the user. This string will be used to label the progress bar for a screenreader when multiple progress bars are on a page, like 'Progress bar 1' and 'Progress bar 2'."
+  },
+  "errorImportingMyItemsMultiCollection": {
+    "message": "Je kunt geen items importeren in Mijn Items die deel uitmaken van meerdere collecties"
   },
   "searchDriversLicense": {
     "message": "Rijbewijzen zoeken"

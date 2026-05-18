@@ -673,6 +673,27 @@
   "passportNumber": {
     "message": "Numéro de passeport"
   },
+  "sex": {
+    "message": "Sexe"
+  },
+  "copySex": {
+    "message": "Copier le sexe"
+  },
+  "birthPlace": {
+    "message": "Lieu de naissance"
+  },
+  "nationality": {
+    "message": "Nationalité"
+  },
+  "copyNationality": {
+    "message": "Copier la nationalité"
+  },
+  "passportType": {
+    "message": "Type de passeport"
+  },
+  "nationalIdentificationNumber": {
+    "message": "Numéro d'identification national"
+  },
   "licenseNumber": {
     "message": "Numéro de permis"
   },
@@ -1021,6 +1042,18 @@
   "typeBankAccountSubtitle": {
     "message": "Informations bancaires"
   },
+  "typePassport": {
+    "message": "Passeport"
+  },
+  "passportDetails": {
+    "message": "Détails du passeport"
+  },
+  "passportAdded": {
+    "message": "Passeport ajouté"
+  },
+  "typePassportSubtitle": {
+    "message": "Document de voyage"
+  },
   "folderSubtitle": {
     "message": "Organisez vos éléments"
   },
@@ -1308,6 +1341,9 @@
   "copyAddress": {
     "message": "Copier l'adresse"
   },
+  "copyBirthPlace": {
+    "message": "Copier le lieu de naissance"
+  },
   "copyPhone": {
     "message": "Copier le téléphone"
   },
@@ -1322,6 +1358,12 @@
   },
   "copyPassportNumber": {
     "message": "Copier le numéro de passeport"
+  },
+  "copyNationalIdentificationNumber": {
+    "message": "Copier le numéro d'identification national"
+  },
+  "copyPassportType": {
+    "message": "Copier le type de passeport"
   },
   "copyFirstName": {
     "message": "Copier le prénom"
@@ -1343,6 +1385,12 @@
   },
   "copyFingerprint": {
     "message": "Copier l'empreinte digitale"
+  },
+  "copyIssuingAuthority": {
+    "message": "Copier l'autorité émettrice / bureau"
+  },
+  "copyIssuingCountry": {
+    "message": "Copier le pays émetteur"
   },
   "copyName": {
     "message": "Copier le nom"
@@ -1383,6 +1431,10 @@
         "example": "Secret Note Item"
       }
     }
+  },
+  "noValueEntered": {
+    "message": "Aucune valeur saisie",
+    "description": "Screen reader announcement appended to a custom field's name when the field has no value entered."
   },
   "noValuesToCopy": {
     "message": "Aucune valeur à copier"
@@ -4274,6 +4326,29 @@
       }
     }
   },
+  "createdTextSend": {
+    "message": "Texte de Send créé"
+  },
+  "createdTextSendWithEmailVerification": {
+    "message": "Texte de Send créé avec le courriel de vérification",
+    "description": "'Send' is a noun and the name of a feature called 'Bitwarden Send'. It should not be translated."
+  },
+  "createdTextSendWithPasswordProtection": {
+    "message": "Texte de Send créé avec le mot de passe",
+    "description": "'Send' is a noun and the name of a feature called 'Bitwarden Send'. It should not be translated."
+  },
+  "createdFileSend": {
+    "message": "Fichier de Send créé",
+    "description": "'Send' is a noun and the name of a feature called 'Bitwarden Send'. It should not be translated."
+  },
+  "createdFileSendWithEmailVerification": {
+    "message": "Fichier de Send créé avec le courriel de vérification",
+    "description": "'Send' is a noun and the name of a feature called 'Bitwarden Send'. It should not be translated."
+  },
+  "createdFileSendWithPasswordProtection": {
+    "message": "Fichier de Send créé avec le mot de passe",
+    "description": "'Send' is a noun and the name of a feature called 'Bitwarden Send'. It should not be translated."
+  },
   "movedItemIdToOrg": {
     "message": "L'élément $ID$ a été déplacé vers une organisation.",
     "placeholders": {
@@ -4408,6 +4483,24 @@
   },
   "copiedBankAccountPinItemId": {
     "message": "Code NIP copié pour l'article $ID$.",
+    "placeholders": {
+      "id": {
+        "content": "$1",
+        "example": "Google"
+      }
+    }
+  },
+  "copiedPassportNumberItemId": {
+    "message": "Numéro de passeport copié pour l'élément $ID$.",
+    "placeholders": {
+      "id": {
+        "content": "$1",
+        "example": "Google"
+      }
+    }
+  },
+  "viewedPassportNumberItemId": {
+    "message": "Numéro de passeport consulté pour l'article $ID$.",
     "placeholders": {
       "id": {
         "content": "$1",
@@ -4562,8 +4655,8 @@
   "revokedEmailError": {
     "message": "1 ou plusieurs courriels appartiennent à des membres révoqués. Restaurez leur accès pour les réinviter."
   },
-  "revocationReasonUnknown": {
-    "message": "Raison inconnue"
+  "revocationReasonNotLogged": {
+    "message": "Aucune raison enregistrée"
   },
   "revocationReasonManual": {
     "message": "Révoqué par un administrateur"
@@ -4573,6 +4666,9 @@
   },
   "revocationReasonSingleOrganizationNonCompliance": {
     "message": "Non conforme à la politique de l'organisation unique"
+  },
+  "revocationReasonDeclinedItemTransfer": {
+    "message": "Transfert d'élément refusé à l'organisation"
   },
   "revokedUserIdTwoFactorNonCompliance": {
     "message": "Accès révoqué à l'organisation pour $ID$ pour le non-respect de la politique de connexion à deux facteurs de l'organisation.",
@@ -4648,9 +4744,6 @@
   },
   "userAcceptedTransfer": {
     "message": "Transfert accepté à la propriété de l'organisation."
-  },
-  "userDeclinedTransfer": {
-    "message": "Révoqué pour le refus du transfert vers la propriété de l'organisation."
   },
   "invitedUserId": {
     "message": "Utilisateur $ID$ invité.",
@@ -13664,6 +13757,9 @@
   "searchBankAccount": {
     "message": "Rechercher un compte de banque"
   },
+  "searchPassport": {
+    "message": "Rechercher des passeports"
+  },
   "copyAccountNumber": {
     "message": "Copier le numéro de compte"
   },
@@ -13819,6 +13915,9 @@
   "progressBar": {
     "message": "Barre de progrès",
     "description": "This is the name of a page component that displays progress to the user. This string will be used to label the progress bar for a screenreader when multiple progress bars are on a page, like 'Progress bar 1' and 'Progress bar 2'."
+  },
+  "errorImportingMyItemsMultiCollection": {
+    "message": "Vous ne pouvez pas importer des éléments dans Mes éléments qui font partie de plusieurs collections"
   },
   "searchDriversLicense": {
     "message": "Rechercher des permis"

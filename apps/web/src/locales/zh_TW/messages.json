@@ -673,6 +673,27 @@
   "passportNumber": {
     "message": "護照號碼"
   },
+  "sex": {
+    "message": "Sex"
+  },
+  "copySex": {
+    "message": "Copy sex"
+  },
+  "birthPlace": {
+    "message": "Birth place"
+  },
+  "nationality": {
+    "message": "Nationality"
+  },
+  "copyNationality": {
+    "message": "Copy nationality"
+  },
+  "passportType": {
+    "message": "Passport type"
+  },
+  "nationalIdentificationNumber": {
+    "message": "National identification number"
+  },
   "licenseNumber": {
     "message": "駕照號碼"
   },
@@ -1021,6 +1042,18 @@
   "typeBankAccountSubtitle": {
     "message": "銀行資料"
   },
+  "typePassport": {
+    "message": "Passport"
+  },
+  "passportDetails": {
+    "message": "Passport details"
+  },
+  "passportAdded": {
+    "message": "Passport added"
+  },
+  "typePassportSubtitle": {
+    "message": "Travel document"
+  },
   "folderSubtitle": {
     "message": "整理您的項目"
   },
@@ -1308,6 +1341,9 @@
   "copyAddress": {
     "message": "複製地址"
   },
+  "copyBirthPlace": {
+    "message": "Copy birth place"
+  },
   "copyPhone": {
     "message": "複製電話"
   },
@@ -1322,6 +1358,12 @@
   },
   "copyPassportNumber": {
     "message": "複製護照號碼"
+  },
+  "copyNationalIdentificationNumber": {
+    "message": "Copy national identification number"
+  },
+  "copyPassportType": {
+    "message": "Copy passport type"
   },
   "copyFirstName": {
     "message": "複製名字"
@@ -1343,6 +1385,12 @@
   },
   "copyFingerprint": {
     "message": "複製指紋"
+  },
+  "copyIssuingAuthority": {
+    "message": "Copy issuing authority / office"
+  },
+  "copyIssuingCountry": {
+    "message": "Copy issuing country"
   },
   "copyName": {
     "message": "複製名稱"
@@ -1383,6 +1431,10 @@
         "example": "Secret Note Item"
       }
     }
+  },
+  "noValueEntered": {
+    "message": "No value entered",
+    "description": "Screen reader announcement appended to a custom field's name when the field has no value entered."
   },
   "noValuesToCopy": {
     "message": "沒有資料可以複製"
@@ -4274,6 +4326,29 @@
       }
     }
   },
+  "createdTextSend": {
+    "message": "Created Text Send"
+  },
+  "createdTextSendWithEmailVerification": {
+    "message": "Created text Send with email verification",
+    "description": "'Send' is a noun and the name of a feature called 'Bitwarden Send'. It should not be translated."
+  },
+  "createdTextSendWithPasswordProtection": {
+    "message": "Created text Send with password",
+    "description": "'Send' is a noun and the name of a feature called 'Bitwarden Send'. It should not be translated."
+  },
+  "createdFileSend": {
+    "message": "Created file Send",
+    "description": "'Send' is a noun and the name of a feature called 'Bitwarden Send'. It should not be translated."
+  },
+  "createdFileSendWithEmailVerification": {
+    "message": "Created file Send with email verification",
+    "description": "'Send' is a noun and the name of a feature called 'Bitwarden Send'. It should not be translated."
+  },
+  "createdFileSendWithPasswordProtection": {
+    "message": "Created file Send with password",
+    "description": "'Send' is a noun and the name of a feature called 'Bitwarden Send'. It should not be translated."
+  },
   "movedItemIdToOrg": {
     "message": "移動項目 $ID$ 至一個組織。",
     "placeholders": {
@@ -4408,6 +4483,24 @@
   },
   "copiedBankAccountPinItemId": {
     "message": "已複製項目 $ID$ 的 PIN 碼。",
+    "placeholders": {
+      "id": {
+        "content": "$1",
+        "example": "Google"
+      }
+    }
+  },
+  "copiedPassportNumberItemId": {
+    "message": "Copied passport number for item $ID$.",
+    "placeholders": {
+      "id": {
+        "content": "$1",
+        "example": "Google"
+      }
+    }
+  },
+  "viewedPassportNumberItemId": {
+    "message": "Viewed passport number for item $ID$.",
     "placeholders": {
       "id": {
         "content": "$1",
@@ -4562,8 +4655,8 @@
   "revokedEmailError": {
     "message": "一個或多個電子郵件屬於已被撤銷的成員。請恢復其存取權以重新邀請。"
   },
-  "revocationReasonUnknown": {
-    "message": "未知原因"
+  "revocationReasonNotLogged": {
+    "message": "No reason logged"
   },
   "revocationReasonManual": {
     "message": "已由管理員撤銷"
@@ -4573,6 +4666,9 @@
   },
   "revocationReasonSingleOrganizationNonCompliance": {
     "message": "不符合單一組織政策"
+  },
+  "revocationReasonDeclinedItemTransfer": {
+    "message": "Declined item transfer to organization"
   },
   "revokedUserIdTwoFactorNonCompliance": {
     "message": "因不符合組織的雙重驗證政策，已撤銷 $ID$ 的組織存取權限。",
@@ -4648,9 +4744,6 @@
   },
   "userAcceptedTransfer": {
     "message": "已接受轉移至組織擁有權。"
-  },
-  "userDeclinedTransfer": {
-    "message": "因拒絕轉移至組織擁有權而遭撤銷。"
   },
   "invitedUserId": {
     "message": "已邀請使用者 $ID$。",
@@ -13664,6 +13757,9 @@
   "searchBankAccount": {
     "message": "搜尋銀行帳戶"
   },
+  "searchPassport": {
+    "message": "Search passports"
+  },
   "copyAccountNumber": {
     "message": "複製帳號"
   },
@@ -13819,6 +13915,9 @@
   "progressBar": {
     "message": "進度條",
     "description": "This is the name of a page component that displays progress to the user. This string will be used to label the progress bar for a screenreader when multiple progress bars are on a page, like 'Progress bar 1' and 'Progress bar 2'."
+  },
+  "errorImportingMyItemsMultiCollection": {
+    "message": "You cannot import items into My Items that are part of multiple collections"
   },
   "searchDriversLicense": {
     "message": "搜尋駕照"
