@@ -27,5 +27,4 @@ module.exports = {
   ],
 
   // Improves on-demand performance, for watches prefer 25%, overridable by setting --maxWorkers
-  maxWorkers: "50%",
 };
