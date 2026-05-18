@@ -56,7 +56,7 @@ jobs:
 
   testing:
     name: Run tests - ${{ matrix.test-group.name }}
-    runs-on: macos-latest-large 
+    runs-on: 	macos-latest-xlarge
     permissions:
       checks: write
       contents: read
