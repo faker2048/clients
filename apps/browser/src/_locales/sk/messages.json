@@ -167,6 +167,9 @@
   "copyPassportNumber": {
     "message": "Kopírovať číslo pasu"
   },
+  "copyNationalIdentificationNumber": {
+    "message": "Kopírovať rodné číslo"
+  },
   "copyFirstName": {
     "message": "Kopírovať krstné meno"
   },
@@ -2001,11 +2004,32 @@
   "brand": {
     "message": "Značka"
   },
+  "birthDay": {
+    "message": "Deň narodenia"
+  },
+  "birthMonth": {
+    "message": "Mesiac narodenia"
+  },
+  "birthYear": {
+    "message": "Rok narodenia"
+  },
+  "expirationDay": {
+    "message": "Deň exspirácie"
+  },
   "expirationMonth": {
     "message": "Mesiac exspirácie"
   },
   "expirationYear": {
     "message": "Rok exspirácie"
+  },
+  "issueDay": {
+    "message": "Deň vydania"
+  },
+  "issueMonth": {
+    "message": "Mesiac vydania"
+  },
+  "issueYear": {
+    "message": "Rok vydania"
   },
   "monthly": {
     "message": "mesačne"
@@ -2100,6 +2124,51 @@
   "passportNumber": {
     "message": "Číslo pasu"
   },
+  "dateOfBirth": {
+    "message": "Dátum narodenia"
+  },
+  "sex": {
+    "message": "Pohlavie"
+  },
+  "copySex": {
+    "message": "Kopírovať pohlavie"
+  },
+  "birthPlace": {
+    "message": "Miesto narodenia"
+  },
+  "copyBirthPlace": {
+    "message": "Kopírovať miesto narodenia"
+  },
+  "nationality": {
+    "message": "Národnosť"
+  },
+  "copyNationality": {
+    "message": "Kopírovať národnosť"
+  },
+  "issuingCountry": {
+    "message": "Vydávajúca krajina"
+  },
+  "copyIssuingCountry": {
+    "message": "Kopírovať vydávajúcu krajinu"
+  },
+  "passportType": {
+    "message": "Typ pasu"
+  },
+  "copyPassportType": {
+    "message": "Kopírovať typ pasu"
+  },
+  "nationalIdentificationNumber": {
+    "message": "Rodné číslo"
+  },
+  "issuingAuthority": {
+    "message": "Vydávajúci orgán"
+  },
+  "copyIssuingAuthority": {
+    "message": "Kopírovať  vydávajúci orgán/úrad"
+  },
+  "issueDate": {
+    "message": "Dátum vydania"
+  },
   "licenseNumber": {
     "message": "Licenčné číslo"
   },
@@ -2190,6 +2259,18 @@
   "typeBankAccountSubtitle": {
     "message": "Bankové údaje"
   },
+  "typePassport": {
+    "message": "Pas"
+  },
+  "passportDetails": {
+    "message": "Podrobnosti o pase"
+  },
+  "passportAdded": {
+    "message": "Pas bol pridaný"
+  },
+  "typePassportSubtitle": {
+    "message": "Cestovný doklad"
+  },
   "typeDriversLicense": {
     "message": "Vodičský preukaz"
   },
@@ -2199,41 +2280,8 @@
   "driversLicenseDetails": {
     "message": "Podrobnosti o vodičskom preukaze"
   },
-  "dateOfBirth": {
-    "message": "Dátum narodenia"
-  },
-  "birthMonth": {
-    "message": "Mesiac narodenia"
-  },
-  "birthDay": {
-    "message": "Deň narodenia"
-  },
-  "birthYear": {
-    "message": "Rok narodenia"
-  },
-  "issuingCountry": {
-    "message": "Vydávajúca krajina"
-  },
   "issuingState": {
     "message": "Vydávajúci štát/provincia"
-  },
-  "issuingAuthority": {
-    "message": "Vydávajúci orgán"
-  },
-  "issueDate": {
-    "message": "Dátum vydania"
-  },
-  "issueMonth": {
-    "message": "Mesiac vydania"
-  },
-  "issueDay": {
-    "message": "Deň vydania"
-  },
-  "issueYear": {
-    "message": "Rok vydania"
-  },
-  "expirationDay": {
-    "message": "Deň exspirácie"
   },
   "licenseClass": {
     "message": "Skupina vodičského preukazu"
@@ -5061,6 +5109,10 @@
       }
     }
   },
+  "noValueEntered": {
+    "message": "Hodnota nie je zadaná",
+    "description": "Screen reader announcement appended to a custom field's name when the field has no value entered."
+  },
   "noValuesToCopy": {
     "message": "Nie je čo kopírovať"
   },
@@ -6478,6 +6530,9 @@
   "searchBankAccount": {
     "message": "Vyhľadať bankový účet"
   },
+  "searchPassport": {
+    "message": "Vyhľadať pasy"
+  },
   "copyAccountNumber": {
     "message": "Kopírovať číslo účtu"
   },
@@ -6557,5 +6612,8 @@
   },
   "hideEmailPolicyInEffect": {
     "message": "Vaša organizácia vyžaduje, aby bola e-mailová adresa viditeľná. Odčiarknite pole \"Skryť e-mailovú adresu\" a uložte zmeny."
+  },
+  "errorImportingMyItemsMultiCollection": {
+    "message": "Do sekcie Moje položky nemôžete importovať položky, ktoré sú súčasťou viacerých zbierok"
   }
 }

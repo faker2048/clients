@@ -167,6 +167,9 @@
   "copyPassportNumber": {
     "message": "Pasaport numarasını kopyala"
   },
+  "copyNationalIdentificationNumber": {
+    "message": "Kimlik numarasını kopyala"
+  },
   "copyFirstName": {
     "message": "Adı kopyala"
   },
@@ -2001,11 +2004,32 @@
   "brand": {
     "message": "Marka"
   },
+  "birthDay": {
+    "message": "Doğum günü"
+  },
+  "birthMonth": {
+    "message": "Doğum ayı"
+  },
+  "birthYear": {
+    "message": "Doğum yılı"
+  },
+  "expirationDay": {
+    "message": "Son kullanma tarihi"
+  },
   "expirationMonth": {
     "message": "Son kullanma ayı"
   },
   "expirationYear": {
     "message": "Son kullanma yılı"
+  },
+  "issueDay": {
+    "message": "Veriliş günü"
+  },
+  "issueMonth": {
+    "message": "Veriliş ayı"
+  },
+  "issueYear": {
+    "message": "Veriliş yılı"
   },
   "monthly": {
     "message": "ay"
@@ -2100,6 +2124,51 @@
   "passportNumber": {
     "message": "Pasaport numarası"
   },
+  "dateOfBirth": {
+    "message": "Doğum tarihi"
+  },
+  "sex": {
+    "message": "Cinsiyet"
+  },
+  "copySex": {
+    "message": "Cinsiyeti kopyala"
+  },
+  "birthPlace": {
+    "message": "Doğum yeri"
+  },
+  "copyBirthPlace": {
+    "message": "Doğum yerini kopyala"
+  },
+  "nationality": {
+    "message": "Uyruk"
+  },
+  "copyNationality": {
+    "message": "Uyruğu kopyala"
+  },
+  "issuingCountry": {
+    "message": "Veren ülke"
+  },
+  "copyIssuingCountry": {
+    "message": "Veren ülkeyi kopyala"
+  },
+  "passportType": {
+    "message": "Pasaport türü"
+  },
+  "copyPassportType": {
+    "message": "Pasaport türünü kopyala"
+  },
+  "nationalIdentificationNumber": {
+    "message": "Kimlik numarası"
+  },
+  "issuingAuthority": {
+    "message": "Veren makam"
+  },
+  "copyIssuingAuthority": {
+    "message": "Veren makamı kopyala"
+  },
+  "issueDate": {
+    "message": "Veriliş tarihi"
+  },
   "licenseNumber": {
     "message": "Ehliyet numarası"
   },
@@ -2190,6 +2259,18 @@
   "typeBankAccountSubtitle": {
     "message": "Banka detayları"
   },
+  "typePassport": {
+    "message": "Pasaport"
+  },
+  "passportDetails": {
+    "message": "Pasaport bilgileri"
+  },
+  "passportAdded": {
+    "message": "Pasaport eklendi"
+  },
+  "typePassportSubtitle": {
+    "message": "Seyahat belgesi"
+  },
   "typeDriversLicense": {
     "message": "Ehliyet"
   },
@@ -2199,41 +2280,8 @@
   "driversLicenseDetails": {
     "message": "Ehliyet bilgileri"
   },
-  "dateOfBirth": {
-    "message": "Doğum tarihi"
-  },
-  "birthMonth": {
-    "message": "Doğum ayı"
-  },
-  "birthDay": {
-    "message": "Doğum günü"
-  },
-  "birthYear": {
-    "message": "Doğum yılı"
-  },
-  "issuingCountry": {
-    "message": "Veren ülke"
-  },
   "issuingState": {
     "message": "Veren eyalet/şehir"
-  },
-  "issuingAuthority": {
-    "message": "Veren makam"
-  },
-  "issueDate": {
-    "message": "Veriliş tarihi"
-  },
-  "issueMonth": {
-    "message": "Veriliş ayı"
-  },
-  "issueDay": {
-    "message": "Veriliş günü"
-  },
-  "issueYear": {
-    "message": "Veriliş yılı"
-  },
-  "expirationDay": {
-    "message": "Son kullanma tarihi"
   },
   "licenseClass": {
     "message": "Ehliyet sınıfı"
@@ -5061,6 +5109,10 @@
       }
     }
   },
+  "noValueEntered": {
+    "message": "Hiçbir değer girilmedi",
+    "description": "Screen reader announcement appended to a custom field's name when the field has no value entered."
+  },
   "noValuesToCopy": {
     "message": "Kopyalanacak değer yok"
   },
@@ -6478,6 +6530,9 @@
   "searchBankAccount": {
     "message": "Banka hesabı ara"
   },
+  "searchPassport": {
+    "message": "Pasaport ara"
+  },
   "copyAccountNumber": {
     "message": "Hesap numarasını kopyala"
   },
@@ -6557,5 +6612,8 @@
   },
   "hideEmailPolicyInEffect": {
     "message": "Your organization requires email visibility. Uncheck \"Hide your email from viewers\" to save."
+  },
+  "errorImportingMyItemsMultiCollection": {
+    "message": "You cannot import items into My Items that are part of multiple collections"
   }
 }
