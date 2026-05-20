@@ -4,7 +4,7 @@ import { CommonModule } from "@angular/common";
 import { Component, OnDestroy, OnInit } from "@angular/core";
 import { FormBuilder, FormsModule, ReactiveFormsModule } from "@angular/forms";
 import { RouterModule } from "@angular/router";
-import { BehaviorSubject, Observable, Subject, firstValueFrom, of } from "rxjs";
+import { BehaviorSubject, Observable, Subject, combineLatest, firstValueFrom, of } from "rxjs";
 import { concatMap, map, switchMap, takeUntil, timeout } from "rxjs/operators";
 
 import { PremiumBadgeComponent } from "@bitwarden/angular/billing/components/premium-badge";
@@ -33,7 +33,10 @@ import { Theme, ThemeTypes } from "@bitwarden/common/platform/enums/theme-type.e
 import { Utils } from "@bitwarden/common/platform/misc/utils";
 import { ThemeStateService } from "@bitwarden/common/platform/theming/theme-state.service";
 import { UserId } from "@bitwarden/common/types/guid";
+import { CipherService } from "@bitwarden/common/vault/abstractions/cipher.service";
 import { PremiumUpgradePromptService } from "@bitwarden/common/vault/abstractions/premium-upgrade-prompt.service";
+import { CipherType } from "@bitwarden/common/vault/enums";
+import { CipherView } from "@bitwarden/common/vault/models/view/cipher.view";
 import {
   CheckboxModule,
   DialogService,
@@ -132,6 +135,11 @@ export class SettingsComponent implements OnInit, OnDestroy {
 
   pinEnabled$: Observable<boolean> = of(true);
 
+  /** SSH-key ciphers with current per-cipher local settings, for the SSH-agent management list. */
+  sshKeyCiphers$: Observable<
+    Array<{ id: string; name: string; exposeToAgent: boolean; notifyOnUse: boolean }>
+  >;
+
   form = this.formBuilder.group({
     // Security
     pin: [null as boolean | null],
@@ -192,6 +200,7 @@ export class SettingsComponent implements OnInit, OnDestroy {
     private configService: ConfigService,
     private validationService: ValidationService,
     private billingAccountProfileStateService: BillingAccountProfileStateService,
+    private cipherService: CipherService,
   ) {
     this.isMac = this.platformUtilsService.getDevice() === DeviceType.MacOsDesktop;
     this.isLinux = this.platformUtilsService.getDevice() === DeviceType.LinuxDesktop;
@@ -254,6 +263,10 @@ export class SettingsComponent implements OnInit, OnDestroy {
         name: this.i18nService.t("sshAgentPromptBehaviorRememberUntilLock"),
         value: SshAgentPromptType.RememberUntilLock,
       },
+      {
+        name: this.i18nService.t("sshAgentPromptBehaviorAdvanced"),
+        value: SshAgentPromptType.Advanced,
+      },
     ];
   }
 
@@ -287,6 +300,29 @@ export class SettingsComponent implements OnInit, OnDestroy {
       getFirstPolicy,
       map((policy) => {
         return policy == null || !policy.enabled;
+      }),
+    );
+
+    this.sshKeyCiphers$ = combineLatest([
+      this.accountService.activeAccount$.pipe(
+        getUserId,
+        switchMap((userId) => this.cipherService.cipherViews$(userId)),
+      ),
+      this.desktopSettingsService.sshAgentCipherSettings$,
+    ]).pipe(
+      map(([views, settings]) => {
+        if (views == null) {
+          return [];
+        }
+        return views
+          .filter((c: CipherView) => c.type === CipherType.SshKey && !c.isDeleted && !c.isArchived)
+          .map((c: CipherView) => ({
+            id: c.id,
+            name: c.name ?? "",
+            exposeToAgent: settings[c.id]?.exposeToAgent !== false,
+            notifyOnUse: settings[c.id]?.notifyOnUse === true,
+          }))
+          .sort((a, b) => a.name.localeCompare(b.name));
       }),
     );
 
@@ -688,6 +724,18 @@ export class SettingsComponent implements OnInit, OnDestroy {
     await this.desktopSettingsService.setSshAgentPromptBehavior(
       this.form.value.sshAgentPromptBehavior,
     );
+  }
+
+  async toggleSshKeyExpose(cipherId: string, exposeToAgent: boolean) {
+    await this.desktopSettingsService.setSshAgentCipherSetting(cipherId, {
+      exposeToAgent: exposeToAgent ? undefined : false,
+    });
+  }
+
+  async toggleSshKeyNotify(cipherId: string, notifyOnUse: boolean) {
+    await this.desktopSettingsService.setSshAgentCipherSetting(cipherId, {
+      notifyOnUse: notifyOnUse ? true : undefined,
+    });
   }
 
   async savePreventScreenshots() {

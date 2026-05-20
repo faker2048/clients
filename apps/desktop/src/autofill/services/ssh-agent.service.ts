@@ -39,7 +39,11 @@ import { DialogService, ToastService } from "@bitwarden/components";
 import { DesktopSettingsService } from "../../platform/services/desktop-settings.service";
 import { ApproveSshRequestComponent } from "../components/approve-ssh-request";
 import { SSH_AGENT_IPC_CHANNELS } from "../models/ipc-channels";
-import { SshAgentPromptType } from "../models/ssh-agent-setting";
+import {
+  rememberDurationMs,
+  SshAgentPromptType,
+  SshAgentRememberDuration,
+} from "../models/ssh-agent-setting";
 
 @Injectable({
   providedIn: "root",
@@ -48,7 +52,8 @@ export class SshAgentService implements OnDestroy {
   SSH_REFRESH_INTERVAL = 1000;
   SSH_VAULT_UNLOCK_REQUEST_TIMEOUT = 60_000;
 
-  private authorizedSshKeys: Record<string, Date> = {};
+  // cipherId -> expiry epoch ms (Infinity = until vault lock / app restart).
+  private authorizedSshKeys: Record<string, number> = {};
 
   private destroy$ = new Subject<void>();
 
@@ -171,7 +176,7 @@ export class SshAgentService implements OnDestroy {
 
           // V1, delete with PM-30758: isListRequest is not present in v2.
           if (isListRequest) {
-            await ipc.autofill.sshAgent.replace(this.toAgentKeys(ciphers));
+            await ipc.autofill.sshAgent.replace(await this.toAgentKeys(ciphers));
             await ipc.autofill.sshAgent.signRequestResponse(requestId, true);
             return;
           }
@@ -182,24 +187,39 @@ export class SshAgentService implements OnDestroy {
               .catch((e) => this.logService.error("Failed to respond to SSH request", e));
           }
 
-          if (await this.needsAuthorization(cipherId, isAgentForwarding)) {
+          const promptType = await firstValueFrom(
+            this.desktopSettingsService.sshAgentPromptBehavior$,
+          );
+          const cipher = ciphers.find((c) => c.id == cipherId);
+          if (await this.needsAuthorization(cipherId, isAgentForwarding, promptType)) {
             ipc.platform.focusWindow();
-            const cipher = ciphers.find((cipher) => cipher.id == cipherId);
             const dialogRef = ApproveSshRequestComponent.open(
               this.dialogService,
-              cipher.name,
+              cipher?.name ?? "",
               application,
               isAgentForwarding,
               namespace,
+              promptType === SshAgentPromptType.Advanced,
             );
 
-            if (await firstValueFrom(dialogRef.closed)) {
-              await this.rememberAuthorization(cipherId);
+            const result = await firstValueFrom(dialogRef.closed);
+            if (result?.approved) {
+              this.logService.info(
+                `[ssh-agent] approved cipherId=${cipherId} app=${application} remember=${result.remember} forward=${isAgentForwarding}`,
+              );
+              await this.rememberAuthorization(cipherId, promptType, result.remember);
               return ipc.autofill.sshAgent.signRequestResponse(requestId, true);
             } else {
+              this.logService.info(
+                `[ssh-agent] denied cipherId=${cipherId} app=${application} forward=${isAgentForwarding}`,
+              );
               return ipc.autofill.sshAgent.signRequestResponse(requestId, false);
             }
           } else {
+            this.logService.info(
+              `[ssh-agent] auto-approved cipherId=${cipherId} app=${application}`,
+            );
+            await this.maybeNotifyUse(cipherId, cipher?.name ?? "", application);
             return ipc.autofill.sshAgent.signRequestResponse(requestId, true);
           }
         }),
@@ -284,7 +304,7 @@ export class SshAgentService implements OnDestroy {
               return;
             }
 
-            await ipc.autofill.sshAgent.replace(this.toAgentKeys(ciphers));
+            await ipc.autofill.sshAgent.replace(await this.toAgentKeys(ciphers));
           }),
           takeUntil(this.destroy$),
         )
@@ -325,12 +345,17 @@ export class SshAgentService implements OnDestroy {
                       await ipc.autofill.sshAgent.init(useV2);
                     }
                   }),
-                  // Subscribe to live cipher data for the active account.
-                  switchMap(() => this.cipherService.cipherViews$(account.id)),
+                  // Subscribe to live cipher data + per-cipher local settings for the active account.
+                  switchMap(() =>
+                    combineLatest([
+                      this.cipherService.cipherViews$(account.id),
+                      this.desktopSettingsService.sshAgentCipherSettings$,
+                    ]),
+                  ),
                   // Skip emissions before cipher data is available (e.g. during initial decrypt).
-                  filter((views) => views != null),
+                  filter(([views]) => views != null),
                   // Project to the SSH key fields needed by the agent.
-                  map((views) => this.toAgentKeys(views)),
+                  concatMap(([views]) => from(this.toAgentKeys(views))),
                   // Skip re-push when the SSH key set hasn't actually changed.
                   distinctUntilChanged((prev, curr) => {
                     // if the length is different, replace keys
@@ -375,32 +400,76 @@ export class SshAgentService implements OnDestroy {
     }
   }
 
-  private toAgentKeys(
+  private async toAgentKeys(
     ciphers: CipherView[],
-  ): { name: string; privateKey: string; cipherId: string }[] {
+  ): Promise<{ name: string; privateKey: string; cipherId: string }[]> {
+    const settings = await firstValueFrom(this.desktopSettingsService.sshAgentCipherSettings$);
     return ciphers
       .filter((c) => c.type === CipherType.SshKey && !c.isDeleted && !c.isArchived)
+      .filter((c) => settings[c.id]?.exposeToAgent !== false)
       .map((c) => ({ name: c.name, privateKey: c.sshKey.privateKey, cipherId: c.id }));
   }
 
-  private async rememberAuthorization(cipherId: string): Promise<void> {
-    this.authorizedSshKeys[cipherId] = new Date();
+  private async rememberAuthorization(
+    cipherId: string,
+    promptType: SshAgentPromptType,
+    duration: SshAgentRememberDuration,
+  ): Promise<void> {
+    if (promptType === SshAgentPromptType.RememberUntilLock) {
+      this.authorizedSshKeys[cipherId] = Number.POSITIVE_INFINITY;
+      return;
+    }
+    if (promptType === SshAgentPromptType.Advanced) {
+      const ttl = rememberDurationMs(duration);
+      if (ttl > 0) {
+        this.authorizedSshKeys[cipherId] = Date.now() + ttl;
+      }
+    }
   }
 
-  private async needsAuthorization(cipherId: string, isForward: boolean): Promise<boolean> {
+  private async needsAuthorization(
+    cipherId: string,
+    isForward: boolean,
+    promptType: SshAgentPromptType,
+  ): Promise<boolean> {
     // Agent forwarding ALWAYS needs authorization because it is a remote machine
     if (isForward) {
       return true;
     }
 
-    const promptType = await firstValueFrom(this.desktopSettingsService.sshAgentPromptBehavior$);
     switch (promptType) {
       case SshAgentPromptType.Never:
         return false;
       case SshAgentPromptType.Always:
         return true;
       case SshAgentPromptType.RememberUntilLock:
-        return !(cipherId in this.authorizedSshKeys);
+      case SshAgentPromptType.Advanced: {
+        const expiresAt = this.authorizedSshKeys[cipherId];
+        if (expiresAt == null) {
+          return true;
+        }
+        if (Date.now() >= expiresAt) {
+          delete this.authorizedSshKeys[cipherId];
+          return true;
+        }
+        return false;
+      }
     }
+  }
+
+  private async maybeNotifyUse(
+    cipherId: string,
+    cipherName: string,
+    application: string,
+  ): Promise<void> {
+    const settings = await firstValueFrom(this.desktopSettingsService.sshAgentCipherSettings$);
+    if (!settings[cipherId]?.notifyOnUse) {
+      return;
+    }
+    this.toastService.showToast({
+      variant: "info",
+      title: this.i18nService.t("sshAgentNotifyOnUseTitle"),
+      message: this.i18nService.t("sshAgentNotifyOnUseMessage", application, cipherName),
+    });
   }
 }
