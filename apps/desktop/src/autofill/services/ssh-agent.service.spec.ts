@@ -88,6 +88,7 @@ describe("SshAgentService (v2 reactive key push)", () => {
     const mockDesktopSettingsService = {
       sshAgentEnabled$: enabledSubject.asObservable(),
       sshAgentPromptBehavior$: of(SshAgentPromptType.Always),
+      sshAgentCipherSettings$: of({} as Record<string, { exposeToAgent?: boolean }>),
     };
     const mockAccountService = { activeAccount$: accountSubject.asObservable() };
     const mockConfigService = { getFeatureFlag: jest.fn().mockResolvedValue(true) };

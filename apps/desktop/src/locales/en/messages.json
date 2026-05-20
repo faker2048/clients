@@ -514,6 +514,49 @@
   "sshAgentPromptBehaviorRememberUntilLock": {
     "message": "Remember until vault is locked"
   },
+  "sshAgentPromptBehaviorAdvanced": {
+    "message": "Advanced (choose duration per request)"
+  },
+  "sshAgentAdvancedRememberPrompt": {
+    "message": "Approve this request and remember for:"
+  },
+  "sshAgentRememberNo": {
+    "message": "Just this once"
+  },
+  "sshAgentRemember10m": {
+    "message": "10 minutes"
+  },
+  "sshAgentRemember1h": {
+    "message": "1 hour"
+  },
+  "sshAgentRemember1d": {
+    "message": "1 day"
+  },
+  "sshAgentManageKeysTitle": {
+    "message": "Manage SSH keys"
+  },
+  "sshAgentManageKeysDesc": {
+    "message": "Control which keys are exposed to the SSH agent and which trigger a notification when used. Settings are stored locally on this device."
+  },
+  "sshAgentNoKeys": {
+    "message": "No SSH keys in this vault."
+  },
+  "sshAgentExposeColumn": {
+    "message": "Expose"
+  },
+  "sshAgentNotifyColumn": {
+    "message": "Notify on use"
+  },
+  "sshAgentNotifyOnUseTitle": {
+    "message": "SSH key used"
+  },
+  "sshAgentNotifyOnUseMessage": {
+    "message": "$APP$ used SSH key \"$KEY$\"",
+    "placeholders": {
+      "app": { "content": "$1", "example": "git" },
+      "key": { "content": "$2", "example": "github-personal" }
+    }
+  },
   "premiumRequired": {
     "message": "Premium required"
   },

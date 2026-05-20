@@ -29,6 +29,7 @@ import { SymmetricCryptoKey } from "@bitwarden/common/platform/models/domain/sym
 import { ThemeStateService } from "@bitwarden/common/platform/theming/theme-state.service";
 import { FakeAccountService, mockAccountServiceWith } from "@bitwarden/common/spec";
 import { UserId } from "@bitwarden/common/types/guid";
+import { CipherService } from "@bitwarden/common/vault/abstractions/cipher.service";
 import { DialogRef, DialogService, ToastService } from "@bitwarden/components";
 import { BiometricStateService, BiometricsStatus, KeyService } from "@bitwarden/key-management";
 import { SessionTimeoutSettingsComponent } from "@bitwarden/key-management-ui";
@@ -81,6 +82,7 @@ describe("SettingsComponent", () => {
   const billingAccountProfileStateService = mock<BillingAccountProfileStateService>();
   const configService = mock<ConfigService>();
   const userVerificationService = mock<UserVerificationService>();
+  const cipherService = mock<CipherService>();
 
   const mockUserKey = new SymmetricCryptoKey(new Uint8Array(64));
 
@@ -142,6 +144,7 @@ describe("SettingsComponent", () => {
         { provide: ToastService, useValue: mock<ToastService>() },
         { provide: DesktopAutotypeService, useValue: desktopAutotypeService },
         { provide: BillingAccountProfileStateService, useValue: billingAccountProfileStateService },
+        { provide: CipherService, useValue: cipherService },
       ],
       schemas: [NO_ERRORS_SCHEMA],
     }).compileComponents();
@@ -180,6 +183,8 @@ describe("SettingsComponent", () => {
     desktopSettingsService.hardwareAcceleration$ = of(false);
     desktopSettingsService.sshAgentEnabled$ = of(false);
     desktopSettingsService.sshAgentPromptBehavior$ = of(SshAgentPromptType.Always);
+    desktopSettingsService.sshAgentCipherSettings$ = of({});
+    cipherService.cipherViews$ = jest.fn().mockReturnValue(of([]));
     desktopSettingsService.preventScreenshots$ = of(false);
     domainSettingsService.showFavicons$ = of(false);
     desktopAutofillSettingsService.enableDuckDuckGoBrowserIntegration$ = of(false);
