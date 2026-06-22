@@ -297,6 +297,53 @@
                   "sshAgentPromptBehaviorDesc" | i18n
                 }}</small>
               </div>
+              <div class="form-group" *ngIf="this.form.value.enableSshAgent">
+                <label>{{ "sshAgentManageKeysTitle" | i18n }}</label>
+                <small class="help-block">{{ "sshAgentManageKeysDesc" | i18n }}</small>
+                <ng-container *ngIf="sshKeyCiphers$ | async as keys">
+                  <p *ngIf="keys.length === 0" class="help-block">
+                    {{ "sshAgentNoKeys" | i18n }}
+                  </p>
+                  <table
+                    *ngIf="keys.length > 0"
+                    class="table table-condensed"
+                    style="margin-top: 8px"
+                  >
+                    <thead>
+                      <tr>
+                        <th>{{ "name" | i18n }}</th>
+                        <th style="width: 1%; white-space: nowrap">
+                          {{ "sshAgentExposeColumn" | i18n }}
+                        </th>
+                        <th style="width: 1%; white-space: nowrap">
+                          {{ "sshAgentNotifyColumn" | i18n }}
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr *ngFor="let k of keys">
+                        <td>{{ k.name }}</td>
+                        <td style="text-align: center">
+                          <input
+                            type="checkbox"
+                            [attr.aria-label]="('sshAgentExposeColumn' | i18n) + ' ' + k.name"
+                            [checked]="k.exposeToAgent"
+                            (change)="toggleSshKeyExpose(k.id, $any($event.target).checked)"
+                          />
+                        </td>
+                        <td style="text-align: center">
+                          <input
+                            type="checkbox"
+                            [attr.aria-label]="('sshAgentNotifyColumn' | i18n) + ' ' + k.name"
+                            [checked]="k.notifyOnUse"
+                            (change)="toggleSshKeyNotify(k.id, $any($event.target).checked)"
+                          />
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </ng-container>
+              </div>
               <div class="form-group" *ngIf="!isLinux">
                 <div class="checkbox">
                   <label for="allowScreenshots">

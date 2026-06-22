@@ -9,12 +9,53 @@
 
     <b>{{params.applicationName}}</b> {{ "sshkeyApprovalMessageInfix" | i18n }}
     <b>{{params.cipherName}}</b>
-    {{ "sshkeyApprovalMessageSuffix" | i18n }} {{ params.action | i18n }}
+    {{ "sshkeyApprovalMessageSuffix" | i18n }} {{ params.action | i18n }} @if (params.advanced) {
+    <p class="tw-mt-4 tw-mb-2">{{ "sshAgentAdvancedRememberPrompt" | i18n }}</p>
+    }
   </div>
   <ng-container bitDialogFooter>
+    @if (params.advanced) {
+    <button
+      type="button"
+      bitButton
+      bitFormButton
+      buttonType="primary"
+      [bitAction]="approveWith(RememberDuration.No)"
+    >
+      {{ "sshAgentRememberNo" | i18n }}
+    </button>
+    <button
+      type="button"
+      bitButton
+      bitFormButton
+      buttonType="secondary"
+      [bitAction]="approveWith(RememberDuration.TenMinutes)"
+    >
+      {{ "sshAgentRemember10m" | i18n }}
+    </button>
+    <button
+      type="button"
+      bitButton
+      bitFormButton
+      buttonType="secondary"
+      [bitAction]="approveWith(RememberDuration.OneHour)"
+    >
+      {{ "sshAgentRemember1h" | i18n }}
+    </button>
+    <button
+      type="button"
+      bitButton
+      bitFormButton
+      buttonType="secondary"
+      [bitAction]="approveWith(RememberDuration.OneDay)"
+    >
+      {{ "sshAgentRemember1d" | i18n }}
+    </button>
+    } @else {
     <button type="submit" bitButton bitFormButton buttonType="primary">
       <span>{{ "authorize" | i18n }}</span>
     </button>
+    }
     <button type="button" bitButton bitFormButton buttonType="secondary" bitDialogClose>
       {{ "deny" | i18n }}
     </button>

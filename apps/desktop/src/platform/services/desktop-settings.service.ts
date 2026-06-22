@@ -18,7 +18,7 @@ import {
 } from "@bitwarden/common/platform/state";
 import { UserId } from "@bitwarden/common/types/guid";
 
-import { SshAgentPromptType } from "../../autofill/models/ssh-agent-setting";
+import { SshAgentCipherSetting, SshAgentPromptType } from "../../autofill/models/ssh-agent-setting";
 import { isDev } from "../../utils";
 import { ModalModeState, WindowState } from "../models/domain/window-state";
 
@@ -63,6 +63,17 @@ const SSH_AGENT_PROMPT_BEHAVIOR = new UserKeyDefinition<SshAgentPromptType>(
   "sshAgentRememberAuthorizations",
   {
     deserializer: (b) => b,
+    clearOn: [],
+  },
+);
+
+// Per-cipher local overrides for SSH agent behavior. Not synced — settings stay
+// on the device whose ssh-agent they affect.
+const SSH_AGENT_CIPHER_SETTINGS = new UserKeyDefinition<Record<string, SshAgentCipherSetting>>(
+  DESKTOP_SETTINGS_DISK,
+  "sshAgentCipherSettings",
+  {
+    deserializer: (v) => v ?? {},
     clearOn: [],
   },
 );
@@ -131,6 +142,9 @@ export class DesktopSettingsService {
   sshAgentPromptBehavior$ = this.sshAgentPromptBehavior.state$.pipe(
     map((v) => v ?? SshAgentPromptType.Always),
   );
+
+  private readonly sshAgentCipherSettings = this.stateProvider.getActive(SSH_AGENT_CIPHER_SETTINGS);
+  sshAgentCipherSettings$ = this.sshAgentCipherSettings.state$.pipe(map((v) => v ?? {}));
 
   private readonly preventScreenshotState = this.stateProvider.getGlobal(PREVENT_SCREENSHOTS);
 
@@ -227,6 +241,20 @@ export class DesktopSettingsService {
 
   async setSshAgentPromptBehavior(value: SshAgentPromptType) {
     await this.sshAgentPromptBehavior.update(() => value);
+  }
+
+  async setSshAgentCipherSetting(cipherId: string, patch: SshAgentCipherSetting) {
+    await this.sshAgentCipherSettings.update((current) => {
+      const next = { ...(current ?? {}) };
+      const merged = { ...(next[cipherId] ?? {}), ...patch };
+      // If both fields are explicitly default, drop the entry to keep storage tidy.
+      if (merged.exposeToAgent === undefined && merged.notifyOnUse === undefined) {
+        delete next[cipherId];
+      } else {
+        next[cipherId] = merged;
+      }
+      return next;
+    });
   }
 
   /**

@@ -15,12 +15,20 @@ import {
 } from "@bitwarden/components";
 import { I18nPipe } from "@bitwarden/ui-common";
 
+import { SshAgentRememberDuration } from "../models/ssh-agent-setting";
+
 export interface ApproveSshRequestParams {
   cipherName: string;
   applicationName: string;
   isAgentForwarding: boolean;
   action: string;
+  /** When true the dialog shows per-grant duration buttons; otherwise a single Authorize button. */
+  advanced: boolean;
 }
+
+export type ApproveSshRequestResult =
+  | { approved: true; remember: SshAgentRememberDuration }
+  | { approved: false };
 
 // FIXME(https://bitwarden.atlassian.net/browse/CL-764): Migrate to OnPush
 // eslint-disable-next-line @angular-eslint/prefer-on-push-component-change-detection
@@ -41,10 +49,11 @@ export interface ApproveSshRequestParams {
 })
 export class ApproveSshRequestComponent {
   approveSshRequestForm = this.formBuilder.group({});
+  readonly RememberDuration = SshAgentRememberDuration;
 
   constructor(
     @Inject(DIALOG_DATA) protected params: ApproveSshRequestParams,
-    private dialogRef: DialogRef<boolean>,
+    private dialogRef: DialogRef<ApproveSshRequestResult>,
     private formBuilder: FormBuilder,
   ) {}
 
@@ -54,6 +63,7 @@ export class ApproveSshRequestComponent {
     applicationName: string,
     isAgentForwarding: boolean,
     namespace: string,
+    advanced: boolean,
   ) {
     let actioni18nKey = "sshActionLogin";
     if (namespace === "git") {
@@ -62,17 +72,27 @@ export class ApproveSshRequestComponent {
       actioni18nKey = "sshActionSign";
     }
 
-    return dialogService.open<boolean, ApproveSshRequestParams>(ApproveSshRequestComponent, {
-      data: {
-        cipherName,
-        applicationName,
-        isAgentForwarding,
-        action: actioni18nKey,
+    return dialogService.open<ApproveSshRequestResult, ApproveSshRequestParams>(
+      ApproveSshRequestComponent,
+      {
+        data: {
+          cipherName,
+          applicationName,
+          isAgentForwarding,
+          action: actioni18nKey,
+          advanced,
+        },
       },
-    });
+    );
+  }
+
+  approveWith(duration: SshAgentRememberDuration) {
+    return async () => {
+      await this.dialogRef.close({ approved: true, remember: duration });
+    };
   }
 
   submit = async () => {
-    await this.dialogRef.close(true);
+    await this.dialogRef.close({ approved: true, remember: SshAgentRememberDuration.No });
   };
 }

@@ -180,7 +180,7 @@ export class SettingsDialogComponent implements OnInit {
     enableBrowserIntegration: false,
     enableHardwareAcceleration: true,
     enableSshAgent: false,
-    sshAgentPromptBehavior: SshAgentPromptType.Always,
+    sshAgentPromptBehavior: this.formBuilder.control<SshAgentPromptType>(SshAgentPromptType.Always),
     allowScreenshots: false,
     enableDuckDuckGoBrowserIntegration: false,
     enableAutotype: this.formBuilder.control<boolean>({
@@ -243,6 +243,10 @@ export class SettingsDialogComponent implements OnInit {
       {
         label: this.i18nService.t("sshAgentPromptBehaviorRememberUntilLock"),
         value: SshAgentPromptType.RememberUntilLock,
+      },
+      {
+        label: this.i18nService.t("sshAgentPromptBehaviorAdvanced"),
+        value: SshAgentPromptType.Advanced,
       },
     ];
   }
