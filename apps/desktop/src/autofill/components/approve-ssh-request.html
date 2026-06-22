@@ -1,66 +1,64 @@
-<form [bitSubmit]="submit" [formGroup]="approveSshRequestForm">
-  <bit-dialog>
-    <div class="tw-font-medium" bitDialogTitle>{{ "sshkeyApprovalTitle" | i18n }}</div>
-    <div bitDialogContent>
-      @if (params.isAgentForwarding) {
-      <bit-callout type="warning" title="{{ 'agentForwardingWarningTitle' | i18n }}">
-        {{ 'agentForwardingWarningText' | i18n }}
-      </bit-callout>
-      }
+<form [bitSubmit]="submit" [formGroup]="approveSshRequestForm" bit-dialog>
+  <div class="tw-font-medium" bitDialogTitle>{{ "sshkeyApprovalTitle" | i18n }}</div>
+  <div bitDialogContent>
+    @if (params.isAgentForwarding) {
+    <bit-callout type="warning" title="{{ 'agentForwardingWarningTitle' | i18n }}">
+      {{ 'agentForwardingWarningText' | i18n }}
+    </bit-callout>
+    }
 
-      <b>{{params.applicationName}}</b> {{ "sshkeyApprovalMessageInfix" | i18n }}
-      <b>{{params.cipherName}}</b>
-      {{ "sshkeyApprovalMessageSuffix" | i18n }} {{ params.action | i18n }} @if (params.advanced &&
-      !params.isAgentForwarding) {
-      <p class="tw-mt-4 tw-mb-2">{{ "sshAgentAdvancedRememberPrompt" | i18n }}</p>
-      }
-    </div>
-    <ng-container bitDialogFooter>
-      @if (params.advanced && !params.isAgentForwarding) {
-      <button
-        type="button"
-        bitButton
-        bitFormButton
-        buttonType="primary"
-        [bitAction]="approveWith(RememberDuration.No)"
-      >
-        {{ "sshAgentRememberNo" | i18n }}
-      </button>
-      <button
-        type="button"
-        bitButton
-        bitFormButton
-        buttonType="secondary"
-        [bitAction]="approveWith(RememberDuration.TenMinutes)"
-      >
-        {{ "sshAgentRemember10m" | i18n }}
-      </button>
-      <button
-        type="button"
-        bitButton
-        bitFormButton
-        buttonType="secondary"
-        [bitAction]="approveWith(RememberDuration.OneHour)"
-      >
-        {{ "sshAgentRemember1h" | i18n }}
-      </button>
-      <button
-        type="button"
-        bitButton
-        bitFormButton
-        buttonType="secondary"
-        [bitAction]="approveWith(RememberDuration.OneDay)"
-      >
-        {{ "sshAgentRemember1d" | i18n }}
-      </button>
-      } @else {
-      <button type="submit" bitButton bitFormButton buttonType="primary">
-        <span>{{ "authorize" | i18n }}</span>
-      </button>
-      }
-      <button type="button" bitButton bitFormButton buttonType="secondary" bitDialogClose>
-        {{ "deny" | i18n }}
-      </button>
-    </ng-container>
-  </bit-dialog>
+    <b>{{params.applicationName}}</b> {{ "sshkeyApprovalMessageInfix" | i18n }}
+    <b>{{params.cipherName}}</b>
+    {{ "sshkeyApprovalMessageSuffix" | i18n }} {{ params.action | i18n }} @if (params.advanced &&
+    !params.isAgentForwarding) {
+    <p class="tw-mt-4 tw-mb-2">{{ "sshAgentAdvancedRememberPrompt" | i18n }}</p>
+    }
+  </div>
+  <ng-container bitDialogFooter>
+    @if (params.advanced && !params.isAgentForwarding) {
+    <button
+      type="button"
+      bitButton
+      bitFormButton
+      buttonType="primary"
+      [bitAction]="approveWith(RememberDuration.No)"
+    >
+      {{ "sshAgentRememberNo" | i18n }}
+    </button>
+    <button
+      type="button"
+      bitButton
+      bitFormButton
+      buttonType="secondary"
+      [bitAction]="approveWith(RememberDuration.TenMinutes)"
+    >
+      {{ "sshAgentRemember10m" | i18n }}
+    </button>
+    <button
+      type="button"
+      bitButton
+      bitFormButton
+      buttonType="secondary"
+      [bitAction]="approveWith(RememberDuration.OneHour)"
+    >
+      {{ "sshAgentRemember1h" | i18n }}
+    </button>
+    <button
+      type="button"
+      bitButton
+      bitFormButton
+      buttonType="secondary"
+      [bitAction]="approveWith(RememberDuration.OneDay)"
+    >
+      {{ "sshAgentRemember1d" | i18n }}
+    </button>
+    } @else {
+    <button type="submit" bitButton bitFormButton buttonType="primary">
+      <span>{{ "authorize" | i18n }}</span>
+    </button>
+    }
+    <button type="button" bitButton bitFormButton buttonType="secondary" bitDialogClose>
+      {{ "deny" | i18n }}
+    </button>
+  </ng-container>
 </form>

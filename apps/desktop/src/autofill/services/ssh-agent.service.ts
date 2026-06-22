@@ -52,8 +52,10 @@ export class SshAgentService implements OnDestroy {
   SSH_REFRESH_INTERVAL = 1000;
   SSH_VAULT_UNLOCK_REQUEST_TIMEOUT = 60_000;
 
-  // cipherId -> expiry epoch ms (Infinity = until vault lock / app restart).
-  private authorizedSshKeys: Record<string, number> = {};
+  private static readonly LOCAL_HOST_KEY = "local";
+  // cipherId -> (hostKey -> expiry epoch ms). Infinity = until vault lock / app restart.
+  // Local connections use LOCAL_HOST_KEY; forwarded connections use the remote host's fingerprint.
+  private authorizedKeys: Map<string, Map<string, number>> = new Map();
 
   private destroy$ = new Subject<void>();
 
@@ -100,11 +102,11 @@ export class SshAgentService implements OnDestroy {
         concatMap(async ([message, enabled]) => {
           if (!enabled) {
             await ipc.autofill.sshAgent.signRequestResponse(message.requestId as number, false);
+            return null;
           }
-          return { message, enabled };
+          return message;
         }),
-        filter(({ enabled }) => enabled),
-        map(({ message }) => message),
+        filter((message) => message != null),
         withLatestFrom(this.authService.activeAccountStatus$, this.accountService.activeAccount$),
         // This switchMap handles unlocking the vault if it is not unlocked:
         //   - If the vault is locked or logged out, we will wait for it to be unlocked:
@@ -170,6 +172,7 @@ export class SshAgentService implements OnDestroy {
           let application = message.processName as string;
           const namespace = message.namespace as string;
           const isAgentForwarding = message.isAgentForwarding as boolean;
+          const hostFingerprint = message.hostFingerprint as string | undefined;
           if (application == "") {
             application = this.i18nService.t("unknownApplication");
           }
@@ -191,7 +194,9 @@ export class SshAgentService implements OnDestroy {
             this.desktopSettingsService.sshAgentPromptBehavior$,
           );
           const cipher = ciphers.find((c) => c.id == cipherId);
-          if (await this.needsAuthorization(cipherId, isAgentForwarding, promptType)) {
+          if (
+            await this.needsAuthorization(cipherId, isAgentForwarding, hostFingerprint, promptType)
+          ) {
             ipc.platform.focusWindow();
             const dialogRef = ApproveSshRequestComponent.open(
               this.dialogService,
@@ -207,7 +212,13 @@ export class SshAgentService implements OnDestroy {
               this.logService.info(
                 `[ssh-agent] approved cipherId=${cipherId} app=${application} remember=${result.remember} forward=${isAgentForwarding}`,
               );
-              await this.rememberAuthorization(cipherId, promptType, result.remember);
+              await this.rememberAuthorization(
+                cipherId,
+                promptType,
+                isAgentForwarding,
+                hostFingerprint,
+                result.remember,
+              );
               return ipc.autofill.sshAgent.signRequestResponse(requestId, true);
             } else {
               this.logService.info(
@@ -231,51 +242,54 @@ export class SshAgentService implements OnDestroy {
       )
       .subscribe();
 
-    // Shared: reset sign-approval state on account switch; v1 also clears the agent keystore.
-    // skip(1) prevents this from firing on the initial account load.
-    this.accountService.activeAccount$.pipe(skip(1), takeUntil(this.destroy$)).subscribe({
-      // Triggered when the user switches the active account.
-      // authorizedSshKeys is always reset so approval prompts reappear for the new session.
-      // In v1, the agent keystore is cleared immediately; in v2 the reactive block below
-      // handles keystore updates when the switched-to account's vault status changes.
-      next: (account) => {
-        this.authorizedSshKeys = {};
-        if (!useV2) {
-          this.logService.info("Active account changed, clearing SSH keys");
-          ipc.autofill.sshAgent
-            .clearKeys()
-            .catch((e) => this.logService.error("Failed to clear SSH keys", e));
-        }
-      },
-      // Triggered by an unexpected error propagating from the account service observable
-      error: (e: unknown) => {
-        this.logService.error("Error in active account observable", e);
-        if (useV2) {
-          this.stopAgent().catch((e: unknown) =>
-            this.logService.error("Failed to clear and stop SSH agent", e),
-          );
-        } else {
-          ipc.autofill.sshAgent
-            .clearKeys()
-            .catch((e) => this.logService.error("Failed to clear SSH keys", e));
-        }
-      },
-      // Triggered when the service is torn down: ngOnDestroy emits on destroy$, which
-      // completes this observable via takeUntil. Happens on app quit or service teardown.
-      complete: () => {
-        this.logService.info("Active account observable completed, clearing SSH keys");
-        this.authorizedSshKeys = {};
-        if (useV2) {
-          this.stopAgent().catch((e: unknown) =>
-            this.logService.error("Failed to clear and stop SSH agent", e),
-          );
-        } else {
-          ipc.autofill.sshAgent
-            .clearKeys()
-            .catch((e) => this.logService.error("Failed to clear SSH keys", e));
-        }
-      },
-    });
+    // Reset sign-approval state on account switch.
+    // account switch is a vault-lock boundary and RememberUntilLock approvals must not survive
+    // it regardless of the user's current SSH-agent setting.
+    // v1 clears the agent keystore here; v2 handles it in the reactive block below.
+    this.accountService.activeAccount$
+      .pipe(
+        // Dedupe by id because activeAccount$ also re-emits when
+        // AccountInfo fields change (email/name/emailVerified/creationDate).
+        distinctUntilChanged((a, b) => a?.id === b?.id),
+        // prevents from triggering on the initial account load
+        skip(1),
+        withLatestFrom(this.desktopSettingsService.sshAgentEnabled$),
+        concatMap(async ([, enabled]) => {
+          this.logService.debug("Active account changed, resetting SSH sign approval state");
+          this.authorizedKeys = new Map();
+          // the V1 sshagent.clearkeys handler isn't registered in the main process
+          // until sshagent.init is called (which only happens when the feature is enabled).
+          if (enabled && !useV2) {
+            this.logService.info("Active account changed, clearing SSH keys");
+            try {
+              await ipc.autofill.sshAgent.clearKeys();
+            } catch (e) {
+              this.logService.error("Failed to clear SSH keys", e);
+            }
+          }
+        }),
+        takeUntil(this.destroy$),
+      )
+      .subscribe({
+        error: (e: unknown) => {
+          this.logService.error("Error in active account observable", e);
+          this.authorizedKeys = new Map();
+        },
+        // on completion the service is being torn down with the rest of the app and the main process will release agent state on exit.
+        complete: () => {
+          this.authorizedKeys = new Map();
+        },
+      });
+
+    // Clear remembered sign-approvals whenever the vault is not unlocked
+    this.authService.activeAccountStatus$
+      .pipe(
+        filter((status) => status !== AuthenticationStatus.Unlocked),
+        takeUntil(this.destroy$),
+      )
+      .subscribe(() => {
+        this.authorizedKeys = new Map();
+      });
 
     // V1 only: periodic key refresh. V2 manages keys reactively — see block below.
     if (!useV2) {
@@ -413,30 +427,39 @@ export class SshAgentService implements OnDestroy {
   private async rememberAuthorization(
     cipherId: string,
     promptType: SshAgentPromptType,
+    isForwarded: boolean,
+    hostFingerprint: string | undefined,
     duration: SshAgentRememberDuration,
   ): Promise<void> {
-    if (promptType === SshAgentPromptType.RememberUntilLock) {
-      this.authorizedSshKeys[cipherId] = Number.POSITIVE_INFINITY;
+    const key = isForwarded ? hostFingerprint : SshAgentService.LOCAL_HOST_KEY;
+    if (!key) {
       return;
     }
-    if (promptType === SshAgentPromptType.Advanced) {
+
+    let expiresAt: number;
+    if (promptType === SshAgentPromptType.RememberUntilLock) {
+      expiresAt = Number.POSITIVE_INFINITY;
+    } else if (promptType === SshAgentPromptType.Advanced) {
       const ttl = rememberDurationMs(duration);
-      if (ttl > 0) {
-        this.authorizedSshKeys[cipherId] = Date.now() + ttl;
+      if (ttl <= 0) {
+        return;
       }
+      expiresAt = Date.now() + ttl;
+    } else {
+      return;
     }
+
+    const approved = this.authorizedKeys.get(cipherId) ?? new Map<string, number>();
+    approved.set(key, expiresAt);
+    this.authorizedKeys.set(cipherId, approved);
   }
 
   private async needsAuthorization(
     cipherId: string,
-    isForward: boolean,
+    isForwarded: boolean,
+    hostFingerprint: string | undefined,
     promptType: SshAgentPromptType,
   ): Promise<boolean> {
-    // Agent forwarding ALWAYS needs authorization because it is a remote machine
-    if (isForward) {
-      return true;
-    }
-
     switch (promptType) {
       case SshAgentPromptType.Never:
         return false;
@@ -444,12 +467,17 @@ export class SshAgentService implements OnDestroy {
         return true;
       case SshAgentPromptType.RememberUntilLock:
       case SshAgentPromptType.Advanced: {
-        const expiresAt = this.authorizedSshKeys[cipherId];
+        const key = isForwarded ? hostFingerprint : SshAgentService.LOCAL_HOST_KEY;
+        // key will only ever be undefined for forwarded requests in the v1, re-prompt.
+        if (!key) {
+          return true;
+        }
+        const expiresAt = this.authorizedKeys.get(cipherId)?.get(key);
         if (expiresAt == null) {
           return true;
         }
         if (Date.now() >= expiresAt) {
-          delete this.authorizedSshKeys[cipherId];
+          this.authorizedKeys.get(cipherId)?.delete(key);
           return true;
         }
         return false;
