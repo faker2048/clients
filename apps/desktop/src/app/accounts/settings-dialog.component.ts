@@ -244,6 +244,10 @@ export class SettingsDialogComponent implements OnInit {
         label: this.i18nService.t("sshAgentPromptBehaviorRememberUntilLock"),
         value: SshAgentPromptType.RememberUntilLock,
       },
+      {
+        label: this.i18nService.t("sshAgentPromptBehaviorAdvanced"),
+        value: SshAgentPromptType.Advanced,
+      },
     ];
   }
 

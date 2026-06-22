@@ -9,13 +9,12 @@
 
     <b>{{params.applicationName}}</b> {{ "sshkeyApprovalMessageInfix" | i18n }}
     <b>{{params.cipherName}}</b>
-    {{ "sshkeyApprovalMessageSuffix" | i18n }} {{ params.action | i18n }} @if (params.advanced &&
-    !params.isAgentForwarding) {
+    {{ "sshkeyApprovalMessageSuffix" | i18n }} {{ params.action | i18n }} @if (params.advanced) {
     <p class="tw-mt-4 tw-mb-2">{{ "sshAgentAdvancedRememberPrompt" | i18n }}</p>
     }
   </div>
   <ng-container bitDialogFooter>
-    @if (params.advanced && !params.isAgentForwarding) {
+    @if (params.advanced) {
     <button
       type="button"
       bitButton
