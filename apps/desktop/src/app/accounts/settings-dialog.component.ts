@@ -180,7 +180,7 @@ export class SettingsDialogComponent implements OnInit {
     enableBrowserIntegration: false,
     enableHardwareAcceleration: true,
     enableSshAgent: false,
-    sshAgentPromptBehavior: SshAgentPromptType.Always,
+    sshAgentPromptBehavior: this.formBuilder.control<SshAgentPromptType>(SshAgentPromptType.Always),
     allowScreenshots: false,
     enableDuckDuckGoBrowserIntegration: false,
     enableAutotype: this.formBuilder.control<boolean>({
