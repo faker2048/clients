@@ -1,5 +1,20 @@
-import { AutofillTargetingRuleTypes } from "@bitwarden/common/autofill/constants";
-import { AutofillTargetingRuleType } from "@bitwarden/common/autofill/types";
+import {
+  AutofillTargetingRuleTypes,
+  FormPurposeCategories,
+} from "@bitwarden/common/autofill/constants";
+import { AutofillTargetingRuleType, FormPurposeCategory } from "@bitwarden/common/autofill/types";
+import { CipherType } from "@bitwarden/common/vault/enums";
+
+/**
+ * Authoritative cipher-type mapping for targeting-rule form categories whose
+ * fields all belong to a single cipher type.
+ */
+export const targetedFormCategoryFillTypes: Partial<Record<FormPurposeCategory, CipherType>> = {
+  [FormPurposeCategories.AccountLogin]: CipherType.Login,
+  [FormPurposeCategories.PaymentCard]: CipherType.Card,
+  [FormPurposeCategories.Identity]: CipherType.Identity,
+  [FormPurposeCategories.Address]: CipherType.Identity,
+};
 
 export const loginQualifiers: AutofillTargetingRuleType[] = [
   AutofillTargetingRuleTypes.username,
@@ -59,7 +74,13 @@ export class AutoFillConstants {
     "e-mail adresse",
   ];
 
-  static readonly UsernameFieldNames: string[] = [
+  /**
+   * Username keywords that commonly describe the whole login form rather than the username
+   * input (e.g. `login-password`, `login-2fa`), so a match is weak evidence of a username field.
+   */
+  static readonly AmbiguousUsernameFieldNames: string[] = ["login"];
+
+  static readonly UnambiguousUsernameFieldNames: string[] = [
     // English
     "username",
     "user name",
@@ -67,13 +88,17 @@ export class AutoFillConstants {
     "user id",
     "customer id",
     "login id",
-    "login",
     // German
     "benutzername",
     "benutzer name",
     "benutzerid",
     "benutzer id",
     ...AutoFillConstants.EmailFieldNames,
+  ];
+
+  static readonly UsernameFieldNames: string[] = [
+    ...AutoFillConstants.UnambiguousUsernameFieldNames,
+    ...AutoFillConstants.AmbiguousUsernameFieldNames,
   ];
 
   static readonly TotpFieldNames: string[] = [
@@ -95,11 +120,26 @@ export class AutoFillConstants {
     "twofactorcode",
     "verificationcode",
     "verification code",
+    "otc-confirmation",
   ];
 
   static readonly RecoveryCodeFieldNames: string[] = ["backup", "recovery"];
 
-  static readonly AmbiguousTotpFieldNames: string[] = ["code", "pin", "otc", "otp", "2fa", "mfa"];
+  /**
+   * TOTP abbreviations that are ambiguous only because short strings collide with longer
+   * values. Matched as a whole token, they reliably indicate a TOTP field.
+   */
+  static readonly AbbreviatedTotpFieldNames: string[] = ["otc", "otp", "2fa", "mfa"];
+
+  /**
+   * TOTP keywords too weak to classify a field on their own. `code` and `pin` are ambiguous in
+   * meaning (e.g. postal code), not just length, so a whole-token match does not strengthen them.
+   */
+  static readonly AmbiguousTotpFieldNames: string[] = [
+    "code",
+    "pin",
+    ...AutoFillConstants.AbbreviatedTotpFieldNames,
+  ];
 
   static readonly SearchFieldNames: string[] = ["search", "query", "find", "go"];
 
@@ -181,6 +221,9 @@ export class AutoFillConstants {
   ] as const;
 
   static readonly FieldIgnoreList: string[] = ["captcha", "findanything", "forgot"];
+
+  /** Normalized substring tokens that identify a field as password-like. */
+  static readonly PasswordFieldNameTokens: string[] = ["password", "passwd"];
 
   static readonly PasswordFieldExcludeList: string[] = [
     "hint",
@@ -1005,6 +1048,41 @@ export class IdentityAutoFillConstants {
     quebec: "QC",
     saskatchewan: "SK",
   };
+}
+
+export class SshKeyAutoFillConstants {
+  /** Field attributes scanned to gather matching keywords. */
+  static readonly SshKeyAttributes: string[] = [
+    "htmlName",
+    "htmlID",
+    "htmlClass",
+    "label-tag",
+    "label-left",
+    "label-top",
+    "placeholder",
+    "title",
+  ];
+
+  /**
+   * Algorithm prefixes that appear in the public key value or the field placeholder
+   * (e.g. GitHub/GitLab "Begins with 'ssh-rsa', 'ecdsa-sha2-nistp256'..."). This is the
+   * strongest signal that a field is an SSH public key field.
+   */
+  static readonly PublicKeyAlgorithmPrefixes: string[] = [
+    "ssh-rsa",
+    "ssh-ed25519",
+    "ssh-dss",
+    "ecdsa-sha2-",
+    "sk-ssh-ed25519",
+    "sk-ecdsa-sha2-",
+  ];
+
+  static readonly PublicKeyFieldNames: string[] = ["public-key", "publickey", "ssh-key", "sshkey"];
+
+  static readonly TitleFieldNames: string[] = ["title", "label", "name", "description"];
+
+  /** Data attribute GitLab places on its public key textarea. */
+  static readonly SupportedAlgorithmsAttribute = "data-supported-algorithms";
 }
 
 export const SubmitLoginButtonNames: string[] = [

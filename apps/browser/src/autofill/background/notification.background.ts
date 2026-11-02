@@ -1,4 +1,4 @@
-import { EMPTY, firstValueFrom, switchMap, map, of } from "rxjs";
+import { EMPTY, filter, firstValueFrom, switchMap, map, of } from "rxjs";
 
 import { CollectionService } from "@bitwarden/admin-console/common";
 import {
@@ -27,6 +27,11 @@ import { ServerConfig } from "@bitwarden/common/platform/abstractions/config/ser
 import { EnvironmentService } from "@bitwarden/common/platform/abstractions/environment.service";
 import { LogService } from "@bitwarden/common/platform/abstractions/log.service";
 import { MessagingService } from "@bitwarden/common/platform/abstractions/messaging.service";
+import {
+  IntraprocessMessageSender,
+  isExternalMessage,
+  MessageListener,
+} from "@bitwarden/common/platform/messaging";
 import { Utils } from "@bitwarden/common/platform/misc/utils";
 import { ThemeStateService } from "@bitwarden/common/platform/theming/theme-state.service";
 import { UserId } from "@bitwarden/common/types/guid";
@@ -69,9 +74,12 @@ import {
   AddLoginMessageData,
   AtRiskPasswordQueueMessage,
   NotificationQueueMessageItem,
+  ADD_TO_LOCKED_VAULT_PENDING_NOTIFICATIONS,
   LockedVaultPendingNotificationsData,
   NotificationBackgroundExtensionMessage,
   NotificationBackgroundExtensionMessageHandlers,
+  RETRY_SENDER,
+  RETRY_WHEN_UNLOCK_COMPLETED,
 } from "./abstractions/notification.background";
 import {
   LoginSecurityTaskInfo,
@@ -148,7 +156,7 @@ export default class NotificationBackground {
     collectPageDetailsResponse: ({ message }) =>
       this.handleCollectPageDetailsResponseMessage(message),
     getWebVaultUrlForNotification: () => this.getWebVaultUrl(),
-    unlockCompleted: ({ message, sender }) => this.handleUnlockCompleted(message, sender),
+    showLoginSavedNotification: ({ message }) => this.handleShowLoginSavedNotification(message),
   };
 
   constructor(
@@ -170,6 +178,8 @@ export default class NotificationBackground {
     private changeLoginPasswordService: ChangeLoginPasswordService,
     protected messagingService: MessagingService,
     private fido2Background: Fido2Background,
+    private intraprocessMessageSender: IntraprocessMessageSender,
+    private messageListener: MessageListener,
   ) {}
 
   init() {
@@ -178,6 +188,7 @@ export default class NotificationBackground {
     }
 
     this.setupExtensionMessageListener();
+    this.setupUnlockCompletedListener();
     this.setupUnlockPopoutCloseListener();
 
     this.cleanupNotificationQueue();
@@ -581,6 +592,52 @@ export default class NotificationBackground {
   }
 
   /**
+   * Sends a "Login saved" confirmation notification bar directly to the given tab.
+   * Used after a cipher is saved via the inline menu "Save and fill" flow,
+   * where no notification bar is already open on the originating tab.
+   *
+   * @param cipherName - The name of the saved cipher, shown in the confirmation bar.
+   * @param cipherId - The ID of the saved cipher, used by the "View" action in the bar.
+   * @param tab - The tab to show the notification bar on.
+   */
+  async triggerLoginSavedNotification(
+    cipherName: string,
+    cipherId: string,
+    tab: chrome.tabs.Tab,
+  ): Promise<void> {
+    const theme = await firstValueFrom(this.themeStateService.selectedTheme$);
+    const showAnimations =
+      (await firstValueFrom(this.autofillService.enableNotificationAnimation$)) ?? true;
+
+    await BrowserApi.tabSendMessageData(tab, "openNotificationBar", {
+      type: "add",
+      typeData: {
+        isVaultLocked: false,
+        theme,
+        launchTimestamp: new Date().getTime(),
+        showAnimations,
+      },
+      params: {},
+      isConfirmation: true,
+      confirmationData: { cipherId, itemName: cipherName },
+    });
+  }
+
+  private async handleShowLoginSavedNotification(
+    message: NotificationBackgroundExtensionMessage,
+  ): Promise<void> {
+    const { senderTabId, cipherId, itemName } = message;
+    if (!senderTabId) {
+      return;
+    }
+    const tab = await BrowserApi.getTab(senderTabId);
+    if (!tab) {
+      return;
+    }
+    await this.triggerLoginSavedNotification(itemName ?? "", cipherId ?? "", tab);
+  }
+
+  /**
    * Adds a login message to the notification queue, prompting the user to save
    * the login if it does not already exist in the vault. If the cipher exists
    * but the password has changed, the user will be prompted to update the password.
@@ -704,7 +761,10 @@ export default class NotificationBackground {
     }
 
     // If there is an active passkey prompt, exit early
-    if (tab.id !== undefined && this.fido2Background.isCredentialRequestInProgress(tab.id)) {
+    if (
+      tab.id !== undefined &&
+      this.fido2Background.shouldDeferVaultNotificationsForPasskeyUi(tab.id)
+    ) {
       return false;
     }
 
@@ -1312,17 +1372,21 @@ export default class NotificationBackground {
     }
     const tab = sender.tab;
     if ((await this.getAuthStatus()) < AuthenticationStatus.Unlocked) {
-      await this.openUnlockPopout(tab, {
-        commandToRetry: {
-          message: {
-            command: message.command,
-            edit: message.edit,
-            folder: message.folder,
+      await this.openUnlockPopout(tab, () =>
+        this.intraprocessMessageSender.send(ADD_TO_LOCKED_VAULT_PENDING_NOTIFICATIONS, {
+          data: {
+            commandToRetry: {
+              message: {
+                command: message.command,
+                edit: message.edit,
+                folder: message.folder,
+              },
+              [RETRY_SENDER]: sender,
+            },
+            target: "notification.background",
           },
-          sender: sender,
-        },
-        target: "notification.background",
-      });
+        }),
+      );
       return;
     }
 
@@ -1640,7 +1704,9 @@ export default class NotificationBackground {
   }
 
   /**
-   * Saves the current tab's domain to the never save list.
+   * Saves the hostname of the frame the login was submitted from to the never save list. The
+   * submitting frame's hostname is used rather than the tab's because exclusions are checked
+   * against the origin of the frame reporting the submission.
    *
    * @param tab - The tab that sent the neverSave message
    */
@@ -1658,7 +1724,7 @@ export default class NotificationBackground {
       this.notificationQueue.splice(i, 1);
       await BrowserApi.tabSendMessageData(tab, "closeNotificationBar");
 
-      const hostname = Utils.getHostname(tab.url ?? "") ?? "";
+      const hostname = Utils.getHostname(queueMessage.data.uri ?? "") ?? "";
       if (hostname) {
         await this.cipherService.saveNeverDomain(hostname);
       }
@@ -1745,34 +1811,46 @@ export default class NotificationBackground {
   }
 
   /**
-   * Handles the unlockCompleted extension message. Will close the notification bar
-   * after an attempted autofill action, and retry the autofill action if the message
-   * contains a follow-up command.
-   *
-   * @param message - The extension message
-   * @param sender - The contextual sender of the message
+   * @see {@link RETRY_WHEN_UNLOCK_COMPLETED}
    */
-  private async handleUnlockCompleted(
-    message: NotificationBackgroundExtensionMessage,
-    sender: chrome.runtime.MessageSender,
-  ): Promise<void> {
+  private setupUnlockCompletedListener() {
+    this.messageListener
+      .messages$(RETRY_WHEN_UNLOCK_COMPLETED)
+      .pipe(filter((message) => !isExternalMessage(message)))
+      .subscribe(({ data }) => {
+        this.handleUnlockCompleted(data).catch((error) => this.logService.error(error));
+      });
+  }
+
+  /**
+   * Closes the notification bar after an attempted autofill action, and retries the autofill
+   * action if the retained command carries a follow-up command.
+   *
+   * A retry whose {@link RETRY_SENDER} names no tab is dropped: both the bar it closes and the
+   * handlers it dispatches to act on that tab.
+   *
+   * @param data - The command the background retained when it opened the unlock popout
+   */
+  private async handleUnlockCompleted(data: LockedVaultPendingNotificationsData): Promise<void> {
     this.unlockPopoutTabId = undefined;
-    const messageData = message.data as LockedVaultPendingNotificationsData;
-    const retryCommand = messageData.commandToRetry.message.command as ExtensionCommandType;
+
+    const sender = data?.commandToRetry?.[RETRY_SENDER];
+    if (!sender?.tab) {
+      return;
+    }
+
+    const retryCommand = data.commandToRetry.message.command as ExtensionCommandType;
     if (this.allowedRetryCommands.has(retryCommand) && sender.tab != null) {
       await BrowserApi.tabSendMessageData(sender.tab, "closeNotificationBar");
     }
 
-    if (messageData.target !== "notification.background") {
+    if (data.target !== "notification.background") {
       return;
     }
 
     const retryHandler: CallableFunction | undefined = this.extensionMessageHandlers[retryCommand];
     if (retryHandler) {
-      retryHandler({
-        message: messageData.commandToRetry.message,
-        sender: messageData.commandToRetry.sender,
-      });
+      retryHandler({ message: data.commandToRetry.message, sender });
     }
   }
 

@@ -3,8 +3,10 @@ import {
   AutoConfirmPolicy,
   DesktopAutotypeDefaultSettingPolicy,
   DisableSendPolicy,
+  FillAssistPolicy,
   MasterPasswordPolicy,
   OrganizationDataOwnershipPolicy,
+  OrganizationUserNotificationPolicy,
   PasswordGeneratorPolicy,
   RemoveUnlockWithPinPolicy,
   RequireSsoPolicy,
@@ -34,7 +36,10 @@ export const ossPolicyEditRegister: BasePolicyEditDefinition[] = [
   new SendOptionsPolicy(),
   new SendControlsPolicy(),
   new RestrictedItemTypesPolicy(),
+  // Autotype MVP only: only displayed when the Autotype MVP feature flag is on and GA is off
   new DesktopAutotypeDefaultSettingPolicy(),
   new UriMatchDefaultPolicy(),
+  new FillAssistPolicy(),
   new AutoConfirmPolicy(),
+  new OrganizationUserNotificationPolicy(),
 ];

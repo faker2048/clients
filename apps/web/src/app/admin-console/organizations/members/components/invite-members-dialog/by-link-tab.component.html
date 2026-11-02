@@ -11,26 +11,48 @@
   </a>
 </p>
 
-<div class="tw-flex tw-items-start tw-gap-2">
-  <bit-form-field class="tw-flex-1">
-    <bit-label> {{ "allowedDomains" | i18n }} </bit-label>
-    <input bitInput type="text" [formControl]="form.controls.domains" />
-    <bit-hint>{{ "allowedDomainsHint" | i18n }}</bit-hint>
-  </bit-form-field>
+<bit-form-field class="tw-flex-1">
+  <bit-label> {{ "allowedDomains" | i18n }} </bit-label>
+  <input bitInput type="text" [formControl]="form.controls.domains" data-testid="allowedDomains" />
+  <bit-hint>{{ "allowedDomainsHint" | i18n }}</bit-hint>
+  <button
+    type="button"
+    bitButton
+    bitFormButton
+    buttonType="primary"
+    [bitAction]="save"
+    [disabled]="domainsEmpty()"
+    [bitTooltip]="domainsEmpty() ? ('mustEnterAtLeastOneDomain' | i18n) : ''"
+    tooltipPosition="left-center"
+    slot="inline-end"
+    data-testid="saveDomains"
+  >
+    {{ "save" | i18n }}
+  </button>
+</bit-form-field>
 
-  @if (form.dirty) {
-    <button
-      type="button"
-      bitButton
-      bitFormButton
-      buttonType="primary"
-      [bitAction]="save"
-      class="tw-mt-[10px]"
-    >
-      {{ "save" | i18n }}
-    </button>
-  }
-</div>
+@if (showSelfHostWarning()) {
+  <bit-callout
+    type="warning"
+    [title]="null"
+    [accessibleName]="'inviteLinkSelfHostEmailVerificationWarning' | i18n"
+  >
+    <div class="tw-flex tw-items-center tw-justify-between tw-gap-4">
+      <span>{{ "inviteLinkSelfHostEmailVerificationWarning" | i18n }}</span>
+      <a
+        bitLink
+        linkType="warning"
+        href="https://bitwarden.com/help/environment-variables"
+        target="_blank"
+        rel="noreferrer"
+        endIcon="bwi-arrow-right"
+        class="tw-shrink-0"
+      >
+        {{ "learnMore" | i18n }}
+      </a>
+    </div>
+  </bit-callout>
+}
 
 @let inviteLink = inviteLink$ | async;
 @if (inviteLink == null) {
@@ -44,13 +66,21 @@
   @if (inviteLinkUrl) {
     <bit-form-field>
       <bit-label>{{ "inviteLink" | i18n }}</bit-label>
-      <input bitInput type="text" disabled="true" [value]="inviteLinkUrl" />
+      <input
+        bitInput
+        type="text"
+        readonly
+        [value]="inviteLinkUrl"
+        [class.tw-select-none]="domainsEmpty()"
+        data-testid="inviteLink"
+      />
       <button
         type="button"
         bitSuffix
         bitIconButton="bwi-refresh"
         [label]="'regenerateInviteLink' | i18n"
         [bitAction]="refreshLink"
+        [disabled]="domainsEmpty()"
       ></button>
       <button
         type="button"
@@ -58,11 +88,21 @@
         bitIconButton="bwi-clone"
         [label]="'copyLink' | i18n"
         [bitAction]="copyLink"
-        [disabled]="form.dirty"
+        [disabled]="domainsEmpty() || form.dirty"
       ></button>
       <bit-hint>{{
         "lastGenerated" | i18n: (inviteLink.creationDate | date: "shortDate")
       }}</bit-hint>
     </bit-form-field>
+    @if (autoConfirmEnabled()) {
+      <bit-form-control>
+        <bit-switch
+          id="by-link-tab_switch_require-admin-confirmation"
+          [formControl]="requireAdminConfirmation"
+        ></bit-switch>
+        <bit-label>{{ "requireAdminConfirmation" | i18n }}</bit-label>
+        <bit-hint>{{ "requireAdminConfirmationHint" | i18n }}</bit-hint>
+      </bit-form-control>
+    }
   }
 }

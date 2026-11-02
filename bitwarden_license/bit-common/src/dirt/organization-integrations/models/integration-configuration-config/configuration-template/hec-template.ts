@@ -32,7 +32,7 @@ export class HecTemplate implements OrgIntegrationTemplate {
         actingUserId: "#ActingUserId#",
         installationId: "#InstallationId#",
         date: "#DateIso8601#",
-        deviceType: "#DeviceType#",
+        deviceName: "#DeviceType#",
         device: "#DeviceTypeId#",
         ipAddress: "#IpAddress#",
         systemUser: "#SystemUser#",
@@ -53,6 +53,9 @@ export class HecTemplate implements OrgIntegrationTemplate {
           },
           group: {
             name: "#GroupName#",
+          },
+          organization: {
+            name: "#OrganizationName#",
           },
         },
       },

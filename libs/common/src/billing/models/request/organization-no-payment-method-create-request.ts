@@ -1,6 +1,5 @@
 import { OrganizationKeysRequest } from "../../../admin-console/models/request/organization-keys.request";
-import { InitiationPath } from "../../../models/request/reference-event.request";
-import { PlanType } from "../../enums";
+import { InitiationPath, PlanType } from "../../enums";
 
 export class OrganizationNoPaymentMethodCreateRequest {
   name: string = "";
@@ -26,6 +25,7 @@ export class OrganizationNoPaymentMethodCreateRequest {
   additionalServiceAccounts: number = 0;
   isFromSecretsManagerTrial: boolean = false;
   initiationPath!: InitiationPath;
+  trialLength?: number;
 
   constructor(key: string, keys: OrganizationKeysRequest, collectionName: string) {
     if (!key) {

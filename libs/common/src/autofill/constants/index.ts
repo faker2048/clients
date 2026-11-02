@@ -110,6 +110,7 @@ export const AutofillOverlayVisibility = {
 
 export const BrowserClientVendors = {
   Chrome: "Chrome",
+  Firefox: "Firefox",
   Opera: "Opera",
   Edge: "Edge",
   Vivaldi: "Vivaldi",
@@ -118,6 +119,7 @@ export const BrowserClientVendors = {
 
 export const BrowserShortcutsUris = {
   Chrome: "chrome://extensions/shortcuts",
+  Firefox: "https://bitwarden.com/help/keyboard-shortcuts",
   Opera: "opera://extensions/shortcuts",
   Edge: "edge://extensions/shortcuts",
   Vivaldi: "vivaldi://extensions/shortcuts",
@@ -125,9 +127,10 @@ export const BrowserShortcutsUris = {
 } as const;
 
 export const DisablePasswordManagerUris = {
-  Chrome: "chrome://settings/autofill",
+  Chrome: "chrome://password-manager/settings",
+  Firefox: "https://bitwarden.com/help/disable-browser-autofill/",
   Opera: "opera://settings/autofill",
-  Edge: "edge://settings/passwords",
+  Edge: "edge://settings/autofill/passwords/settings",
   Vivaldi: "vivaldi://settings/autofill",
   Unknown: "https://bitwarden.com/help/disable-browser-autofill/",
 } as const;
@@ -175,6 +178,28 @@ export const SHADOW_ROOT_CANDIDATE_NODE_NAMES = Object.freeze(
     "SECTION",
     "SPAN",
   ]),
+);
+
+/**
+ * Client-side sentinel meaning "use the default fill assist rules." The policy
+ * edit UI stores this value when the admin selects "Default"; the
+ * `effectiveFillAssistRulesUrl$` resolver in `DomainSettingsService` treats a
+ * match as "fall through to server config" (the region-specific CDN from
+ * `appsettings.fillAssistRules`).
+ *
+ * Changing this constant requires either a data migration or adding the old
+ * value to LEGACY_DEFAULT_FILL_ASSIST_RULES_URLS below — otherwise existing
+ * "Default" policies silently flip to "Custom" pointing at the retired URL.
+ */
+export const DEFAULT_FILL_ASSIST_RULES_URL = "https://fillassist.bitwarden.com";
+
+/**
+ * Historical values of DEFAULT_FILL_ASSIST_RULES_URL. Policies saved before
+ * the current constant was adopted must still be recognized as "Default" by
+ * the edit UI and resolver. Add previous values here when the constant changes.
+ */
+export const LEGACY_DEFAULT_FILL_ASSIST_RULES_URLS = Object.freeze(
+  new Set<string>(["https://github.com/bitwarden/map-the-web/releases/latest/download"]),
 );
 
 /**

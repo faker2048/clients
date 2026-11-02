@@ -1,7 +1,9 @@
-import { EncString } from "@bitwarden/common/key-management/crypto/models/enc-string";
 import { View } from "@bitwarden/common/models/view/view";
 import { DeepJsonify } from "@bitwarden/common/types/deep-jsonify";
 import { OrganizationId, OrganizationReportId } from "@bitwarden/common/types/guid";
+import { CipherViewLikeUtils } from "@bitwarden/common/vault/utils/cipher-view-like-utils";
+// eslint-disable-next-line no-restricted-imports
+import { EncString } from "@bitwarden/legacy-crypto";
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 import { AccessReportApi } from "../api/access-report.api";
@@ -159,36 +161,18 @@ export class AccessReportView implements View {
   }
 
   /**
-   * Get at-risk password count for a member across ALL applications.
+   * Count the applications a member is flagged at-risk in.
    *
    * @param memberId - Organization user ID
-   * @returns Count of at-risk passwords for this member across every application
+   * @param options.criticalOnly - Restrict the count to applications marked critical
+   * @returns Number of in-scope applications where the member is at-risk
    */
-  getAtRiskPasswordCountForMember(memberId: string): number {
-    let count = 0;
-    this.reports.forEach((report) => {
-      if (report.memberRefs[memberId] === true) {
-        count += report.getAtRiskCipherIds().length;
-      }
-    });
-    return count;
-  }
-
-  /**
-   * Get at-risk password count for a member scoped to critical applications only.
-   *
-   * @param memberId - Organization user ID
-   * @returns Count of at-risk passwords for this member across applications
-   *   flagged critical
-   */
-  getCriticalAtRiskPasswordCountForMember(memberId: string): number {
-    let count = 0;
-    this.getCriticalApplications().forEach((report) => {
-      if (report.memberRefs[memberId] === true) {
-        count += report.getAtRiskCipherIds().length;
-      }
-    });
-    return count;
+  getAtRiskApplicationCountForMember(
+    memberId: string,
+    { criticalOnly = false }: { criticalOnly?: boolean } = {},
+  ): number {
+    const apps = criticalOnly ? this.getCriticalAtRiskApplications() : this.getAtRiskApplications();
+    return apps.filter((app) => app.memberRefs[memberId] === true).length;
   }
 
   // === Update Methods ===
@@ -371,8 +355,11 @@ export class AccessReportView implements View {
           data.cipherRefs = { ...r.cipherRefs };
           data.memberCount = r.memberCount;
           data.atRiskMemberCount = r.atRiskMemberCount;
-          data.iconUri = r.iconUri;
-          data.iconCipherId = r.iconCipherId;
+
+          if (r.iconCipher) {
+            data.iconUri = CipherViewLikeUtils.uri(r.iconCipher) ?? undefined;
+          }
+
           return data;
         }),
         memberRegistry: Object.fromEntries(

@@ -1,13 +1,15 @@
-import { CollectionView } from "@bitwarden/common/admin-console/models/collections";
-import { EncryptService } from "@bitwarden/common/key-management/crypto/abstractions/encrypt.service";
-import { EncString } from "@bitwarden/common/key-management/crypto/models/enc-string";
-import { asUuid, uuidAsString } from "@bitwarden/common/platform/abstractions/sdk/sdk.service";
-import Domain from "@bitwarden/common/platform/models/domain/domain-base";
-import { CollectionId, OrganizationId } from "@bitwarden/common/types/guid";
-import { OrgKey } from "@bitwarden/common/types/key";
+// eslint-disable-next-line no-restricted-imports
+import { EncryptService, EncString } from "@bitwarden/legacy-crypto";
 import { Collection as SdkCollection } from "@bitwarden/sdk-internal";
 
+import { asUuid, uuidAsString } from "../../../platform/abstractions/sdk/sdk.service";
+import Domain from "../../../platform/models/domain/domain-base";
+import { CollectionId, OrganizationId } from "../../../types/guid";
+import { OrgKey } from "../../../types/key";
+
 import { CollectionData } from "./collection.data";
+
+import { CollectionView } from ".";
 
 export const CollectionTypes = {
   SharedCollection: 0,
@@ -26,6 +28,8 @@ export class Collection extends Domain {
   manage: boolean = false;
   type: CollectionType = CollectionTypes.SharedCollection;
   defaultUserCollectionEmail: string | undefined;
+  /** True when an enabled PAM access rule gates the collection's items. Derived by the server. */
+  hasEnabledAccessRule: boolean = false;
 
   constructor(c: { id: CollectionId; name: EncString; organizationId: OrganizationId }) {
     super();
@@ -50,6 +54,7 @@ export class Collection extends Domain {
     collection.manage = obj.manage;
     collection.type = obj.type;
     collection.defaultUserCollectionEmail = obj.defaultUserCollectionEmail;
+    collection.hasEnabledAccessRule = obj.hasEnabledAccessRule;
 
     return collection;
   }
@@ -70,6 +75,7 @@ export class Collection extends Domain {
     collection.hidePasswords = view.hidePasswords;
     collection.manage = view.manage;
     collection.type = view.type;
+    collection.hasEnabledAccessRule = view.hasEnabledAccessRule;
 
     return collection;
   }

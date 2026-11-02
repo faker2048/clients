@@ -1,5 +1,5 @@
 import { CommonModule } from "@angular/common";
-import { Component, computed, input, resource } from "@angular/core";
+import { Component, computed, inject, input, resource } from "@angular/core";
 import { toObservable, toSignal } from "@angular/core/rxjs-interop";
 import { combineLatest, of, switchMap, map, catchError, from, Observable, startWith } from "rxjs";
 
@@ -10,7 +10,7 @@ import { JslibModule } from "@bitwarden/angular/jslib.module";
 import { OrganizationService } from "@bitwarden/common/admin-console/abstractions/organization/organization.service.abstraction";
 import { CollectionView } from "@bitwarden/common/admin-console/models/collections";
 import { AccountService } from "@bitwarden/common/auth/abstractions/account.service";
-import { getUserId } from "@bitwarden/common/auth/services/account.service";
+import { getOptionalUserId } from "@bitwarden/common/auth/services/account.service";
 import { isCardExpired } from "@bitwarden/common/autofill/utils";
 import { BillingAccountProfileStateService } from "@bitwarden/common/billing/abstractions";
 import { LogService } from "@bitwarden/common/platform/abstractions/log.service";
@@ -28,12 +28,9 @@ import { VaultSettingsService } from "@bitwarden/common/vault/abstractions/vault
 import { CipherType } from "@bitwarden/common/vault/enums";
 import { CipherView } from "@bitwarden/common/vault/models/view/cipher.view";
 import { SecurityTaskType, TaskService } from "@bitwarden/common/vault/tasks";
-import {
-  CalloutModule,
-  SearchModule,
-  TypographyModule,
-  LinkComponent,
-} from "@bitwarden/components";
+import { CalloutModule, SearchModule, TypographyModule } from "@bitwarden/components";
+
+import { CIPHER_VIEW_BANNER, CipherViewBanner } from "../tokens/cipher-view-banner.token";
 
 import { AdditionalOptionsComponent } from "./additional-options/additional-options.component";
 import { AttachmentsV2ViewComponent } from "./attachments/attachments-v2-view.component";
@@ -72,7 +69,6 @@ import { ViewIdentitySectionsComponent } from "./view-identity-sections/view-ide
     ViewIdentitySectionsComponent,
     LoginCredentialsViewComponent,
     AutofillOptionsViewComponent,
-    LinkComponent,
     TypographyModule,
   ],
 })
@@ -81,6 +77,11 @@ export class CipherViewComponent {
    * The cipher to display details for
    */
   readonly cipher = input.required<CipherView>();
+
+  /** Host-provided banner above the cipher's details; null when unprovided. */
+  protected readonly bannerComponent: CipherViewBanner | null = inject(CIPHER_VIEW_BANNER, {
+    optional: true,
+  });
 
   /**
    * Observable version of the cipher input
@@ -103,7 +104,22 @@ export class CipherViewComponent {
    */
   readonly isAdminConsole = input<boolean>(false);
 
-  readonly activeUserId$ = getUserId(this.accountService.activeAccount$);
+  readonly activeUserId$ = getOptionalUserId(this.accountService.activeAccount$);
+
+  /**
+   * Optional input for manually specifying whether the user can be considered
+   * premium in anonymous environments where the userId is not available
+   */
+  readonly hasAnonymousPremium = input<boolean>(false);
+  /**
+   * Optional input for explicitly disabling the at-risk password link (used for
+   * situations where the cipher contents are not editable)
+   */
+  readonly hideChangePasswordLink = input<boolean>(false);
+  /**
+   * Optional input for explicitly disabling the item history section of cipher details
+   */
+  readonly hideItemHistory = input<boolean>(false);
 
   constructor(
     private organizationService: OrganizationService,
@@ -126,6 +142,10 @@ export class CipherViewComponent {
         // Use provided collections if available
         if (providedCollections && providedCollections.length > 0) {
           return of(providedCollections);
+        }
+        // If no userId is available, return undefined
+        if (!userId) {
+          return of(undefined);
         }
         // Otherwise, load collections based on cipher's collectionIds
         if (cipher.collectionIds && cipher.collectionIds.length > 0) {
@@ -166,8 +186,8 @@ export class CipherViewComponent {
   readonly hadPendingChangePasswordTask = toSignal(
     combineLatest([this.activeUserId$, this.cipher$]).pipe(
       switchMap(([userId, cipher]) => {
-        // Early exit if not a Login cipher owned by an organization
-        if (cipher?.type !== CipherType.Login || !cipher?.organizationId) {
+        // Early exit if not a Login cipher owned by an organization, or if userId is not available
+        if (cipher?.type !== CipherType.Login || !cipher?.organizationId || !userId) {
           return of(false);
         }
 
@@ -275,12 +295,19 @@ export class CipherViewComponent {
 
   /**
    * Whether the login password for the cipher is considered at risk.
-   * The password is only evaluated when the user is premium and has edit access to the cipher.
+   * The password is only evaluated when the user is premium (and not anonymous;
+   * the userId is required to make the check) and has edit access to the cipher.
    */
   readonly passwordIsAtRisk = toSignal(
     combineLatest([this.activeUserId$, this.cipher$]).pipe(
       switchMap(([userId, cipher]) => {
-        if (!cipher.hasLoginPassword || !cipher.edit || cipher.organizationId || cipher.isDeleted) {
+        if (
+          !cipher.hasLoginPassword ||
+          !cipher.edit ||
+          cipher.organizationId ||
+          cipher.isDeleted ||
+          !userId
+        ) {
           return of(false);
         }
         return this.switchPremium$(
@@ -298,6 +325,7 @@ export class CipherViewComponent {
 
   readonly showChangePasswordLink = computed(() => {
     return (
+      !this.hideChangePasswordLink() &&
       this.hasLoginUri() &&
       (this.hadPendingChangePasswordTask() ||
         // Only show the change password link if the password is at risk and the user has opted to see at-risk password notifications.
@@ -346,12 +374,16 @@ export class CipherViewComponent {
 
   /**
    * Switches between two observables based on whether the user has a premium from any source.
+   * If the userId is not available the `hasAnonymousPremium` input is used as a fallback
    */
   private switchPremium$<T>(
-    userId: UserId,
+    userId: UserId | null,
     ifPremium$: () => Observable<T>,
     ifNonPremium$: () => Observable<T>,
   ): Observable<T> {
+    if (!userId) {
+      return this.hasAnonymousPremium() ? ifPremium$() : ifNonPremium$();
+    }
     return this.billingAccountService
       .hasPremiumFromAnySource$(userId)
       .pipe(switchMap((isPremium) => (isPremium ? ifPremium$() : ifNonPremium$())));

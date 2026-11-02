@@ -1,8 +1,13 @@
 import { mock } from "jest-mock-extended";
 
+import { BrowserClientVendors } from "@bitwarden/common/autofill/constants";
+import { DeviceType } from "@bitwarden/common/enums";
 import { LogService } from "@bitwarden/logging";
 
+import { BrowserPlatformUtilsService } from "../services/platform-utils/browser-platform-utils.service";
+
 import { BrowserApi } from "./browser-api";
+import { ExtensionInstallType } from "./extension-install-type";
 
 type ChromeSettingsGet = chrome.types.ChromeSetting<boolean>["get"];
 
@@ -28,6 +33,125 @@ describe("BrowserApi", () => {
       const result = BrowserApi.isManifestVersion(2);
 
       expect(result).toBe(false);
+    });
+  });
+
+  describe("getInstallType", () => {
+    let originalIsWebExtensionsApi: boolean;
+    let originalIsChromeApi: boolean;
+
+    beforeEach(() => {
+      originalIsWebExtensionsApi = BrowserApi.isWebExtensionsApi;
+      originalIsChromeApi = BrowserApi.isChromeApi;
+    });
+
+    afterEach(() => {
+      BrowserApi.isWebExtensionsApi = originalIsWebExtensionsApi;
+      BrowserApi.isChromeApi = originalIsChromeApi;
+      delete (global.chrome as any).management;
+      delete (global as any).browser;
+    });
+
+    it.each([
+      ["admin", ExtensionInstallType.Admin],
+      ["development", ExtensionInstallType.Development],
+      ["normal", ExtensionInstallType.Normal],
+      ["sideload", ExtensionInstallType.Sideload],
+      ["other", ExtensionInstallType.Other],
+    ])("returns %s when chrome.management.getSelf reports it", async (raw, expected) => {
+      (global.chrome as any).management = {
+        getSelf: jest.fn().mockResolvedValue({ installType: raw }),
+      };
+
+      const result = await BrowserApi.getInstallType();
+
+      expect(result).toBe(expected);
+    });
+
+    it("prefers browser.management.getSelf when isWebExtensionsApi is true", async () => {
+      BrowserApi.isWebExtensionsApi = true;
+      const browserGetSelf = jest.fn().mockResolvedValue({ installType: "admin" });
+      const chromeGetSelf = jest.fn().mockResolvedValue({ installType: "normal" });
+      (global as any).browser = { management: { getSelf: browserGetSelf } };
+      (global.chrome as any).management = { getSelf: chromeGetSelf };
+
+      const result = await BrowserApi.getInstallType();
+
+      expect(result).toBe(ExtensionInstallType.Admin);
+      expect(browserGetSelf).toHaveBeenCalled();
+      expect(chromeGetSelf).not.toHaveBeenCalled();
+    });
+
+    it("returns Unknown when management.getSelf rejects", async () => {
+      (global.chrome as any).management = {
+        getSelf: jest.fn().mockRejectedValue(new Error("not available")),
+      };
+
+      const result = await BrowserApi.getInstallType();
+
+      expect(result).toBe(ExtensionInstallType.Unknown);
+    });
+
+    it("returns Unknown when the result has no installType", async () => {
+      (global.chrome as any).management = {
+        getSelf: jest.fn().mockResolvedValue({}),
+      };
+
+      const result = await BrowserApi.getInstallType();
+
+      expect(result).toBe(ExtensionInstallType.Unknown);
+    });
+
+    it("returns Unknown when chrome.management is absent", async () => {
+      const result = await BrowserApi.getInstallType();
+
+      expect(result).toBe(ExtensionInstallType.Unknown);
+    });
+
+    it("returns Unknown when neither chrome nor browser is available", async () => {
+      BrowserApi.isWebExtensionsApi = false;
+      BrowserApi.isChromeApi = false;
+
+      const result = await BrowserApi.getInstallType();
+
+      expect(result).toBe(ExtensionInstallType.Unknown);
+    });
+  });
+
+  describe("getManagedStorage", () => {
+    afterEach(() => {
+      delete (global.chrome as any).storage.managed;
+      (chrome.runtime.lastError as any) = undefined;
+    });
+
+    it("resolves the managed storage contents", async () => {
+      const managed = { environment: { base: "https://vault.example.com" } };
+      (global.chrome as any).storage.managed = {
+        get: jest.fn().mockImplementation((_keys, callback) => callback(managed)),
+      };
+
+      const result = await BrowserApi.getManagedStorage();
+
+      expect(result).toEqual(managed);
+    });
+
+    it("resolves undefined when the browser has no managed storage area", async () => {
+      const result = await BrowserApi.getManagedStorage();
+
+      expect(result).toBeUndefined();
+    });
+
+    it("rejects with the runtime error when the read fails", async () => {
+      (global.chrome as any).storage.managed = {
+        get: jest.fn().mockImplementation((_keys, callback) => {
+          (chrome.runtime.lastError as any) = { message: "Managed storage manifest not found" };
+          callback(undefined);
+        }),
+      };
+
+      await expect(BrowserApi.getManagedStorage()).rejects.toEqual({
+        message: "Managed storage manifest not found",
+      });
     });
   });
 
@@ -388,6 +512,94 @@ describe("BrowserApi", () => {
     });
   });
 
+  describe("isAnyPopupOrPopoutOpen", () => {
+    describe("when MV3 and chrome.runtime.getContexts is available", () => {
+      beforeEach(() => {
+        (chrome.runtime as any).getContexts = jest.fn();
+        jest.spyOn(BrowserApi, "manifestVersion", "get").mockReturnValue(3);
+      });
+
+      afterEach(() => {
+        delete (chrome.runtime as any).getContexts;
+      });
+
+      it("returns true when a POPUP context exists", async () => {
+        (chrome.runtime as any).getContexts.mockResolvedValue([
+          { contextType: "POPUP", documentUrl: "chrome-extension://id/popup/index.html" },
+        ]);
+
+        expect(await BrowserApi.isAnyPopupOrPopoutOpen()).toBe(true);
+      });
+
+      it("returns true when a TAB context with uilocation=popout exists", async () => {
+        (chrome.runtime as any).getContexts.mockResolvedValue([
+          {
+            contextType: "TAB",
+            documentUrl: "chrome-extension://id/popup/index.html?uilocation=popout",
+          },
+        ]);
+
+        expect(await BrowserApi.isAnyPopupOrPopoutOpen()).toBe(true);
+      });
+
+      it("returns false when only non-popout TAB contexts exist", async () => {
+        (chrome.runtime as any).getContexts.mockResolvedValue([
+          { contextType: "TAB", documentUrl: "chrome-extension://id/popup/index.html" },
+        ]);
+
+        expect(await BrowserApi.isAnyPopupOrPopoutOpen()).toBe(false);
+      });
+
+      it("returns false when no contexts exist", async () => {
+        (chrome.runtime as any).getContexts.mockResolvedValue([]);
+
+        expect(await BrowserApi.isAnyPopupOrPopoutOpen()).toBe(false);
+      });
+    });
+
+    describe("when MV2, falls back to getExtensionViews", () => {
+      beforeEach(() => {
+        jest.spyOn(BrowserApi, "manifestVersion", "get").mockReturnValue(2);
+      });
+
+      it("returns true if the popup is open", async () => {
+        chrome.extension.getViews = jest.fn().mockImplementation((props) => {
+          return props?.type === "popup" ? [window] : [];
+        });
+
+        expect(await BrowserApi.isAnyPopupOrPopoutOpen()).toBe(true);
+      });
+
+      it("returns true if a popout tab is open", async () => {
+        const popoutWindow = {
+          location: { href: "chrome-extension://id/popup/index.html?uilocation=popout" },
+        };
+        chrome.extension.getViews = jest.fn().mockImplementation((props) => {
+          return props?.type === "tab" ? [popoutWindow] : [];
+        });
+
+        expect(await BrowserApi.isAnyPopupOrPopoutOpen()).toBe(true);
+      });
+
+      it("returns false if neither popup nor popout is open", async () => {
+        chrome.extension.getViews = jest.fn().mockReturnValue([]);
+
+        expect(await BrowserApi.isAnyPopupOrPopoutOpen()).toBe(false);
+      });
+
+      it("returns false if only a non-popout tab is open", async () => {
+        const tabWindow = {
+          location: { href: "chrome-extension://id/popup/index.html" },
+        };
+        chrome.extension.getViews = jest.fn().mockImplementation((props) => {
+          return props?.type === "tab" ? [tabWindow] : [];
+        });
+
+        expect(await BrowserApi.isAnyPopupOrPopoutOpen()).toBe(false);
+      });
+    });
+  });
+
   describe("isAnyViewFocused", () => {
     describe("when MV3 and chrome.runtime.getContexts is available", () => {
       beforeEach(() => {
@@ -565,6 +777,74 @@ describe("BrowserApi", () => {
         expect.any(Function),
       );
       expect(returnFrame).toEqual(mockFrameDetails);
+    });
+  });
+
+  describe("getSenderFrameUrl", () => {
+    const committedUrl = "https://example.test/entry";
+    const routedUrl = "https://example.test/logged-in/step-one";
+    const subFrameUrl = "https://widget.example.test/form";
+    const tab = mock<chrome.tabs.Tab>({ id: 1, url: routedUrl });
+
+    const mockFrameLookup = (url: string | undefined) => {
+      chrome.webNavigation.getFrame = jest
+        .fn()
+        .mockImplementation((_details, callback) => callback(url == null ? undefined : { url }));
+    };
+
+    it("returns the frame's live URL over the URL the sender was committed at", async () => {
+      mockFrameLookup(routedUrl);
+
+      const frameUrl = await BrowserApi.getSenderFrameUrl({ frameId: 0, url: committedUrl, tab });
+
+      expect(chrome.webNavigation.getFrame).toHaveBeenCalledWith(
+        { tabId: 1, frameId: 0 },
+        expect.any(Function),
+      );
+      expect(frameUrl).toBe(routedUrl);
+    });
+
+    it("returns a sub-frame's own URL rather than the tab's", async () => {
+      mockFrameLookup(subFrameUrl);
+
+      const frameUrl = await BrowserApi.getSenderFrameUrl({ frameId: 7, url: subFrameUrl, tab });
+
+      expect(frameUrl).toBe(subFrameUrl);
+    });
+
+    it("falls back to the tab URL for a top-level frame when the lookup resolves nothing", async () => {
+      mockFrameLookup(undefined);
+
+      const frameUrl = await BrowserApi.getSenderFrameUrl({ frameId: 0, url: committedUrl, tab });
+
+      expect(frameUrl).toBe(routedUrl);
+    });
+
+    it("falls back to the sender URL for a sub-frame when the lookup resolves nothing", async () => {
+      mockFrameLookup(undefined);
+
+      const frameUrl = await BrowserApi.getSenderFrameUrl({ frameId: 7, url: subFrameUrl, tab });
+
+      expect(frameUrl).toBe(subFrameUrl);
+    });
+
+    it("falls back to the sender URL when the lookup rejects", async () => {
+      chrome.webNavigation.getFrame = jest.fn().mockImplementation(() => {
+        throw new Error("No frame");
+      });
+
+      const frameUrl = await BrowserApi.getSenderFrameUrl({ frameId: 7, url: subFrameUrl, tab });
+
+      expect(frameUrl).toBe(subFrameUrl);
+    });
+
+    it("skips the lookup when the sender carries no tab", async () => {
+      mockFrameLookup(routedUrl);
+
+      const frameUrl = await BrowserApi.getSenderFrameUrl({ url: committedUrl });
+
+      expect(chrome.webNavigation.getFrame).not.toHaveBeenCalled();
+      expect(frameUrl).toBe(committedUrl);
     });
   });
 
@@ -853,6 +1133,37 @@ describe("BrowserApi", () => {
 
       expect(result).toBe(false);
     });
+
+    it("returns true if password saving is overridden on Firefox", async () => {
+      const originalIsFirefox = BrowserApi.isFirefox;
+      BrowserApi.isFirefox = true;
+
+      const mockFn = jest.fn<
+        void,
+        [
+          details: chrome.types.ChromeSettingGetDetails,
+          callback: (details: chrome.types.ChromeSettingGetResult<boolean>) => void,
+        ],
+        never
+      >((details, callback) => {
+        callback({
+          value: false,
+          levelOfControl: "controlled_by_this_extension",
+        });
+      });
+      const addressGet = jest.fn();
+      chrome.privacy.services.passwordSavingEnabled.get = mockFn as unknown as ChromeSettingsGet;
+      chrome.privacy.services.autofillAddressEnabled.get =
+        addressGet as unknown as ChromeSettingsGet;
+
+      const result = await BrowserApi.browserAutofillSettingsOverridden();
+
+      expect(result).toBe(true);
+      expect(mockFn).toHaveBeenCalled();
+      expect(addressGet).not.toHaveBeenCalled();
+
+      BrowserApi.isFirefox = originalIsFirefox;
+    });
   });
 
   describe("updateDefaultBrowserAutofillSettings", () => {
@@ -868,6 +1179,58 @@ describe("BrowserApi", () => {
       expect(chrome.privacy.services.passwordSavingEnabled.set).toHaveBeenCalledWith({
         value: false,
       });
+    });
+
+    it("only sets passwordSavingEnabled on Firefox", async () => {
+      const originalIsFirefox = BrowserApi.isFirefox;
+      const originalIsWebExtensionsApi = BrowserApi.isWebExtensionsApi;
+      BrowserApi.isFirefox = true;
+      BrowserApi.isWebExtensionsApi = true;
+      globalThis.browser = mock<typeof browser>({
+        privacy: { services: { passwordSavingEnabled: { set: jest.fn() } } },
+      });
+
+      await BrowserApi.updateDefaultBrowserAutofillSettings(false);
+
+      expect(browser.privacy.services.passwordSavingEnabled.set).toHaveBeenCalledWith({
+        value: false,
+      });
+      expect(chrome.privacy.services.autofillAddressEnabled.set).not.toHaveBeenCalled();
+      expect(chrome.privacy.services.autofillCreditCardEnabled.set).not.toHaveBeenCalled();
+
+      BrowserApi.isFirefox = originalIsFirefox;
+      BrowserApi.isWebExtensionsApi = originalIsWebExtensionsApi;
+      delete (global as any).browser;
+    });
+  });
+
+  describe("getBrowserClientVendor", () => {
+    it.each([
+      [DeviceType.FirefoxExtension, BrowserClientVendors.Firefox],
+      [DeviceType.FirefoxBrowser, BrowserClientVendors.Firefox],
+    ])("returns Firefox for %s device", (deviceType, expected) => {
+      jest.spyOn(BrowserPlatformUtilsService, "getDevice").mockReturnValue(deviceType);
+
+      expect(BrowserApi.getBrowserClientVendor(window)).toBe(expected);
+    });
+
+    // A DuckDuckGo extension implies the Windows (WebView2) build, which is Chromium.
+    it("returns Chrome for DuckDuckGoExtension device", () => {
+      jest
+        .spyOn(BrowserPlatformUtilsService, "getDevice")
+        .mockReturnValue(DeviceType.DuckDuckGoExtension);
+
+      expect(BrowserApi.getBrowserClientVendor(window)).toBe(BrowserClientVendors.Chrome);
+    });
+
+    // DuckDuckGoBrowser spans both the Windows Chromium build and the WebKit macOS build, so
+    // it must not be assumed Chromium.
+    it("returns Unknown for DuckDuckGoBrowser device", () => {
+      jest
+        .spyOn(BrowserPlatformUtilsService, "getDevice")
+        .mockReturnValue(DeviceType.DuckDuckGoBrowser);
+
+      expect(BrowserApi.getBrowserClientVendor(window)).toBe(BrowserClientVendors.Unknown);
     });
   });
 

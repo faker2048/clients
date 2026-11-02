@@ -1,13 +1,12 @@
 // FIXME: Update this file to be type safe and remove this and next line
 // @ts-strict-ignore
-import { AsyncPipe, CommonModule } from "@angular/common";
-import { Component, OnDestroy, HostListener, viewChildren } from "@angular/core";
+import { CommonModule } from "@angular/common";
+import { Component, OnDestroy, HostListener, viewChildren, computed, Signal } from "@angular/core";
 import { takeUntilDestroyed, toSignal } from "@angular/core/rxjs-interop";
 import { FormsModule } from "@angular/forms";
 import { ActivatedRoute, Router } from "@angular/router";
-import { lastValueFrom, Observable, switchMap, combineLatest, map, firstValueFrom } from "rxjs";
+import { lastValueFrom, switchMap, combineLatest, map, firstValueFrom, of } from "rxjs";
 
-import { StopClickDirective } from "@bitwarden/angular/directives/stop-click.directive";
 import { NoSendsIcon } from "@bitwarden/assets/svg";
 import { PolicyService } from "@bitwarden/common/admin-console/abstractions/policy/policy.service.abstraction";
 import { PolicyType } from "@bitwarden/common/admin-console/enums";
@@ -15,8 +14,7 @@ import { AccountService } from "@bitwarden/common/auth/abstractions/account.serv
 import { AuthService } from "@bitwarden/common/auth/abstractions/auth.service";
 import { AuthenticationStatus } from "@bitwarden/common/auth/enums/authentication-status";
 import { getUserId } from "@bitwarden/common/auth/services/account.service";
-import { FeatureFlag } from "@bitwarden/common/enums/feature-flag.enum";
-import { ConfigService } from "@bitwarden/common/platform/abstractions/config/config.service";
+import { BillingAccountProfileStateService } from "@bitwarden/common/billing/abstractions";
 import { EnvironmentService } from "@bitwarden/common/platform/abstractions/environment.service";
 import { I18nService } from "@bitwarden/common/platform/abstractions/i18n.service";
 import { LogService } from "@bitwarden/common/platform/abstractions/log.service";
@@ -29,15 +27,12 @@ import { SendType } from "@bitwarden/common/tools/send/types/send-type";
 import { SendId } from "@bitwarden/common/types/guid";
 import {
   AsyncActionsModule,
-  AutofocusDirective,
   CalloutComponent,
   DialogRef,
   DialogService,
-  NoItemsModule,
   SearchModule,
   ToastService,
   ToggleGroupModule,
-  IconComponent,
 } from "@bitwarden/components";
 import {
   DefaultSendFormConfigService,
@@ -50,6 +45,7 @@ import {
   SendListComponent,
   SendListState,
   SendListFiltersService,
+  SendPolicyService,
 } from "@bitwarden/send-ui";
 import { I18nPipe } from "@bitwarden/ui-common";
 
@@ -64,16 +60,11 @@ import { SendSuccessDrawerDialogComponent } from "./shared";
   selector: "app-send",
   imports: [
     I18nPipe,
-    AsyncPipe,
-    AutofocusDirective,
     CalloutComponent,
     CommonModule,
     AsyncActionsModule,
     FormsModule,
-    StopClickDirective,
-    IconComponent,
     SearchModule,
-    NoItemsModule,
     HeaderModule,
     NewSendDropdownComponent,
     ToggleGroupModule,
@@ -114,11 +105,9 @@ export class SendComponent implements OnDestroy {
   };
 
   private sendItemDialogRef?:
-    | DialogRef<SendItemDialogResult, SendAddEditDialogComponent>
-    | undefined;
+    DialogRef<SendItemDialogResult, SendAddEditDialogComponent> | undefined;
   noItemIcon = NoSendsIcon;
   selectedToggleValue?: SendFilterType;
-  SendUIRefresh$: Observable<boolean>;
 
   protected readonly filteredSends = toSignal(this.sendItemsService.filteredAndSortedSends$, {
     initialValue: [],
@@ -158,11 +147,44 @@ export class SendComponent implements OnDestroy {
     initialValue: "",
   });
 
-  // Legacy variables. TODO: Remove once the SendUI refresh is permanently enabled
   SendFilterType = SendFilterType;
-  SendType = SendType;
 
   private readonly newSendDropdowns = viewChildren(NewSendDropdownComponent);
+
+  protected readonly hasPremium$ = this.accountService.activeAccount$.pipe(
+    switchMap((account) => {
+      if (!account) {
+        return of(false);
+      }
+      return this.billingAccountProfileStateService.hasPremiumFromAnySource$(account.id);
+    }),
+  );
+
+  protected readonly allowedSendTypes = toSignal(
+    combineLatest([this.sendPolicyService.allowedSendTypes$, this.hasPremium$]).pipe(
+      takeUntilDestroyed(),
+      map(([allowedSendTypes, hasPremium]) => {
+        if (!hasPremium) {
+          return allowedSendTypes.filter((st) => st !== SendType.File && st !== SendType.Item);
+        }
+        return allowedSendTypes;
+      }),
+    ),
+    { initialValue: [] },
+  );
+
+  protected readonly sendTypeFilters: Signal<{ filter: SendFilterType; translationKey: string }[]> =
+    computed(() =>
+      this.allowedSendTypes().flatMap<{ filter: SendFilterType; translationKey: string }>((st) => {
+        if (st === SendType.Text) {
+          return { filter: SendFilterType.Text, translationKey: "sendTypeText" };
+        }
+        if (st === SendType.File) {
+          return { filter: SendFilterType.File, translationKey: "sendTypeFile" };
+        }
+        return [];
+      }),
+    );
 
   constructor(
     private i18nService: I18nService,
@@ -177,15 +199,14 @@ export class SendComponent implements OnDestroy {
     private accountService: AccountService,
     private route: ActivatedRoute,
     private router: Router,
-    private configService: ConfigService,
+    private billingAccountProfileStateService: BillingAccountProfileStateService,
     private sendFormService: SendFormService,
     private sendItemsService: SendItemsService,
     private sendItemsFiltersService: SendListFiltersService,
     private validationService: ValidationService,
+    private sendPolicyService: SendPolicyService,
     authService: AuthService,
   ) {
-    this.SendUIRefresh$ = this.configService.getFeatureFlag$(FeatureFlag.SendUIRefresh);
-
     // Lock/logout always wins over the unsaved-edits guard. We listen for the
     // active account's auth status leaving `Unlocked` — `lockService.lock`
     // flips this during `wipeDecryptedState` / `waitForLockedStatus`, well
@@ -200,26 +221,27 @@ export class SendComponent implements OnDestroy {
       }
     });
 
-    this.route.queryParamMap.pipe(takeUntilDestroyed()).subscribe((params) => {
-      const typeParam = params.get("type");
-      let toggleValue: SendFilterType = SendFilterType.All;
-      let sendType: SendType | null = null;
-      if (typeParam === SendFilterType.Text) {
-        toggleValue = SendFilterType.Text;
-        sendType = SendType.Text;
-      }
-      if (typeParam === SendFilterType.File) {
-        toggleValue = SendFilterType.File;
-        sendType = SendType.File;
-      }
-      this.selectedToggleValue = toggleValue;
-      this.sendItemsFiltersService.filterForm.patchValue({ sendType });
-    });
+    combineLatest([this.route.queryParamMap, this.hasPremium$])
+      .pipe(takeUntilDestroyed())
+      .subscribe(([params, hasPremium]) => {
+        const typeParam = params.get("type");
+        let toggleValue: SendFilterType = SendFilterType.All;
+        let sendType: SendType | null = null;
+        if (typeParam === SendFilterType.Text) {
+          toggleValue = SendFilterType.Text;
+          sendType = SendType.Text;
+        }
+        if (typeParam === SendFilterType.File && hasPremium) {
+          toggleValue = SendFilterType.File;
+          sendType = SendType.File;
+        }
+        this.selectedToggleValue = toggleValue;
+        this.sendItemsFiltersService.filterForm.patchValue({ sendType });
+      });
   }
 
   ngOnDestroy() {
     this.dialogService.closeAll();
-    void this.dialogService.closeDrawer();
   }
 
   async addSend() {
@@ -247,24 +269,10 @@ export class SendComponent implements OnDestroy {
    * @param formConfig The form configuration.
    * */
   async openSendItemDialog(formConfig: SendFormConfig) {
-    const useRefresh = await this.configService.getFeatureFlag(FeatureFlag.SendUIRefresh);
-    // Prevent multiple dialogs from being opened but allow drawers since they will prevent multiple being open themselves
-    if (this.sendItemDialogRef && !useRefresh) {
-      return;
-    }
-
-    let sendItemDialogRef: DialogRef<SendItemDialogResult, SendAddEditDialogComponent> | undefined;
-    if (useRefresh) {
-      sendItemDialogRef = await SendAddEditDialogComponent.openDrawer(this.dialogService, {
-        formConfig,
-        closePredicate: this.sendFormService.promptForUnsavedEdits.bind(this.sendFormService),
-      });
-    } else {
-      sendItemDialogRef = SendAddEditDialogComponent.open(this.dialogService, {
-        formConfig,
-        closePredicate: this.sendFormService.promptForUnsavedEdits.bind(this.sendFormService),
-      });
-    }
+    const sendItemDialogRef = await SendAddEditDialogComponent.openDrawer(this.dialogService, {
+      formConfig,
+      closePredicate: this.sendFormService.promptForUnsavedEdits.bind(this.sendFormService),
+    });
 
     // If we were unable to open the dialog (because the previous drawer failed to close, for example) exit immediately
     if (!sendItemDialogRef) {
@@ -276,12 +284,8 @@ export class SendComponent implements OnDestroy {
     const result = await lastValueFrom(this.sendItemDialogRef.closed);
     this.sendItemDialogRef = undefined;
 
-    // If we created a new Send and the feature flag is on, open the success drawer
-    if (
-      result?.result === SendItemDialogResult.Created &&
-      result?.send &&
-      (await this.configService.getFeatureFlag(FeatureFlag.SendUIRefresh))
-    ) {
+    // If we created a new Send, open the success drawer
+    if (result?.result === SendItemDialogResult.Created && result?.send) {
       await this.dialogService.openDrawer(SendSuccessDrawerDialogComponent, {
         data: result.send,
       });

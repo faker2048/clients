@@ -33,7 +33,10 @@ export abstract class SendFormService {
   sendFormConfig?: SendFormConfig;
 
   /** The original SendView of the Send the form displays */
-  readonly originalSendView: Signal<SendView | null>;
+  readonly originalSendView: Signal<SendView | null> = signal(null);
+
+  /** The updated state of the SendView shown in the form */
+  readonly updatedSendView: Signal<SendView | null> = signal(null);
 
   /**
    * Registers a child form group with the parent form group. Used by child components to add their form groups to
@@ -58,10 +61,19 @@ export abstract class SendFormService {
   abstract initializeSendForm(sendFormConfig: SendFormConfig): Promise<void>;
 
   /**
-   * Submits the Send form. Returns `undefined` if the form has an
-   * error or the service encounters a network error on submission
+   * Submits the Send form. This will return `undefined` if the Send form had errors preventing
+   * its submission, and throw any errors it receives from encryption, decryption, or the API call.
+   *
+   * If `abortPendingSubmission()` is called after a file Send's content has already been
+   * uploaded, the created Send is rolled back and this resolves to `undefined` rather than
+   * throwing.
    */
   abstract submitSendForm(): Promise<SendView>;
+
+  /**
+   * Aborts an in-flight `submitSendForm()` call, if any. A no-op if no submission is in progress.
+   */
+  abstract abortPendingSubmission(): void;
 
   /** Returns whether the Send form currently has edits */
   abstract sendFormHasEdits(): boolean;

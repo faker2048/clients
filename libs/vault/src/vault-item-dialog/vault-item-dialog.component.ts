@@ -1,14 +1,22 @@
 // FIXME: Update this file to be type safe and remove this and next line
 // @ts-strict-ignore
-import { CommonModule } from "@angular/common";
-import { Component, ElementRef, Inject, OnDestroy, OnInit, viewChild } from "@angular/core";
+import { CommonModule, NgComponentOutlet } from "@angular/common";
+import {
+  Component,
+  ElementRef,
+  inject,
+  Inject,
+  OnDestroy,
+  OnInit,
+  Type,
+  viewChild,
+} from "@angular/core";
 import { takeUntilDestroyed, toSignal } from "@angular/core/rxjs-interop";
 import { Router } from "@angular/router";
 import { firstValueFrom, Observable, Subject, switchMap } from "rxjs";
 import { map } from "rxjs/operators";
 
 import { PremiumBadgeComponent } from "@bitwarden/angular/billing/components/premium-badge";
-import { VaultViewPasswordHistoryService } from "@bitwarden/angular/services/view-password-history.service";
 import { ApiService } from "@bitwarden/common/abstractions/api.service";
 import { CollectionView } from "@bitwarden/common/admin-console/models/collections";
 import { Organization } from "@bitwarden/common/admin-console/models/domain/organization";
@@ -16,6 +24,8 @@ import { AccountService } from "@bitwarden/common/auth/abstractions/account.serv
 import { getUserId } from "@bitwarden/common/auth/services/account.service";
 import { BillingAccountProfileStateService } from "@bitwarden/common/billing/abstractions";
 import { EventCollectionService, EventType } from "@bitwarden/common/dirt/event-logs";
+import { FeatureFlag } from "@bitwarden/common/enums/feature-flag.enum";
+import { ConfigService } from "@bitwarden/common/platform/abstractions/config/config.service";
 import { I18nService } from "@bitwarden/common/platform/abstractions/i18n.service";
 import { LogService } from "@bitwarden/common/platform/abstractions/log.service";
 import { MessagingService } from "@bitwarden/common/platform/abstractions/messaging.service";
@@ -33,8 +43,8 @@ import { UnionOfValues } from "@bitwarden/common/vault/types/union-of-values";
 import { CipherViewLike } from "@bitwarden/common/vault/utils/cipher-view-like-utils";
 import {
   AsyncActionsModule,
-  BadgeModule,
   BitIconButtonComponent,
+  ChipActionComponent,
   ButtonModule,
   CenterPositionStrategy,
   DIALOG_DATA,
@@ -58,6 +68,8 @@ import {
 } from "../cipher-view/attachments/attachments-v2.component";
 import { CipherViewComponent } from "../cipher-view/cipher-view.component";
 import { DecryptionFailureDialogComponent } from "../components/decryption-failure-dialog/decryption-failure-dialog.component";
+import { VaultViewPasswordHistoryService } from "../services/view-password-history.service";
+import { SHARE_ITEM_ENTRY_POINT } from "../tokens/share-item-entry-point.token";
 
 export type VaultItemDialogMode = "view" | "form";
 
@@ -129,10 +141,11 @@ export type VaultItemDialogResult = UnionOfValues<typeof VaultItemDialogResult>;
     CommonModule,
     CipherFormModule,
     AsyncActionsModule,
-    BadgeModule,
+    ChipActionComponent,
     ItemModule,
     PremiumBadgeComponent,
     I18nPipe,
+    NgComponentOutlet,
   ],
   providers: [{ provide: ViewPasswordHistoryService, useClass: VaultViewPasswordHistoryService }],
 })
@@ -219,6 +232,11 @@ export class VaultItemDialogComponent implements OnInit, OnDestroy {
 
   private readonly userCanArchive = toSignal(this.userCanArchive$, { initialValue: false });
 
+  private readonly pm32009NewItemTypes = toSignal(
+    this.configService.getFeatureFlag$(FeatureFlag.PM32009NewItemTypes),
+    { initialValue: false },
+  );
+
   protected get isTrashFilter() {
     return !!this.cipher?.isDeleted;
   }
@@ -253,8 +271,13 @@ export class VaultItemDialogComponent implements OnInit, OnDestroy {
     return !this.canEdit && this.formConfig.mode !== "partial-edit";
   }
 
+  /** Gated cipher: saving it would clobber the fields the server suppressed with blanks. */
+  protected get isPartialData() {
+    return this.cipher?.partial ?? false;
+  }
+
   protected get showEdit() {
-    return this.showCipherView && !this.isTrashFilter && !this.showRestore;
+    return this.showCipherView && !this.isTrashFilter && !this.showRestore && !this.isPartialData;
   }
 
   protected get showCipherView() {
@@ -307,6 +330,17 @@ export class VaultItemDialogComponent implements OnInit, OnDestroy {
 
   protected confirmedPremiumUpgrade = false;
 
+  /**
+   * The client's share entry point, if it has one. See {@link SHARE_ITEM_ENTRY_POINT}.
+   *
+   * The explicit type argument keeps `SafeInjectionToken`'s tagged generic from collapsing to `{}`
+   * when this file is compiled as part of a consuming project, which the template type-checker
+   * then rejects as an `ngComponentOutlet` value.
+   */
+  protected readonly shareItemEntryPoint = inject<Type<unknown>>(SHARE_ITEM_ENTRY_POINT, {
+    optional: true,
+  });
+
   constructor(
     @Inject(DIALOG_DATA) protected params: VaultItemDialogParams,
     private dialogRef: DialogRef<VaultItemDialogResult>,
@@ -324,6 +358,7 @@ export class VaultItemDialogComponent implements OnInit, OnDestroy {
     private apiService: ApiService,
     private eventCollectionService: EventCollectionService,
     private archiveService: CipherArchiveService,
+    private configService: ConfigService,
   ) {
     this.updateTitle();
     this.premiumUpgradeService.upgradeConfirmed$
@@ -367,8 +402,8 @@ export class VaultItemDialogComponent implements OnInit, OnDestroy {
         ),
       );
 
-      // If user cannot edit and dialog opened in form mode, force to view mode
-      if (!this.canEdit && this.formConfig.mode !== "partial-edit" && this.params.mode === "form") {
+      // If the cipher cannot be edited and the dialog opened in form mode, force to view mode
+      if ((this.disableEdit || this.isPartialData) && this.params.mode === "form") {
         this.params.mode = "view";
         this.loadForm = false;
         this.updateTitle();
@@ -537,16 +572,14 @@ export class VaultItemDialogComponent implements OnInit, OnDestroy {
         const cipherData = new CipherData(cipherResponse);
         const cipher = new Cipher(cipherData);
 
-        updatedCipherView = await cipher.decrypt(
-          await this.cipherService.getKeyForCipherKeyDecryption(cipher, activeUserId),
-        );
+        updatedCipherView = await this.cipherService.decrypt(cipher, activeUserId);
       } else {
-        const updatedCipher = await this.cipherService.get(
-          this.formConfig.originalCipher?.id,
-          activeUserId,
+        updatedCipherView = await firstValueFrom(
+          this.cipherService.cipherView$(
+            activeUserId,
+            this.formConfig.originalCipher?.id as CipherId,
+          ),
         );
-
-        updatedCipherView = await this.cipherService.decrypt(updatedCipher, activeUserId);
       }
 
       this.cipherFormComponent().patchCipher((currentCipher) => {
@@ -572,6 +605,15 @@ export class VaultItemDialogComponent implements OnInit, OnDestroy {
     if (this.params.mode === "view" || this.cipher == null || this.formConfig.mode === "clone") {
       await this.dialogRef.close(this._cipherModified ? VaultItemDialogResult.Saved : undefined);
       return;
+    }
+
+    // Refresh from local state so attachments modified during edit aren't stale in view mode.
+    const activeUserId = await firstValueFrom(this.userId$);
+    const latestCipher = await firstValueFrom(
+      this.cipherService.cipherView$(activeUserId, this.cipher.id as CipherId),
+    );
+    if (latestCipher != null) {
+      this.cipher = latestCipher;
     }
 
     // We're in Form mode, and we have a cipher, switch back to View mode.
@@ -654,30 +696,36 @@ export class VaultItemDialogComponent implements OnInit, OnDestroy {
   private updateTitle(): void {
     const translation: { [key: string]: { [key: number]: string } } = {
       view: {
-        [CipherType.Login]: "viewItemHeaderLogin",
-        [CipherType.Card]: "viewItemHeaderCard",
-        [CipherType.Identity]: "viewItemHeaderIdentity",
-        [CipherType.SecureNote]: "viewItemHeaderNote",
+        [CipherType.Login]: "viewItemHeaderLoginSentenceCase",
+        [CipherType.Card]: "viewItemHeaderCardSentenceCase",
+        [CipherType.Identity]: "viewItemHeaderIdentitySentenceCase",
+        [CipherType.SecureNote]: this.pm32009NewItemTypes()
+          ? "viewItemHeaderSecureNote"
+          : "viewItemHeaderNoteSentenceCase",
         [CipherType.SshKey]: "viewItemHeaderSshKey",
         [CipherType.BankAccount]: "viewItemHeaderBankAccount",
         [CipherType.DriversLicense]: "viewItemHeaderLicense",
         [CipherType.Passport]: "viewItemHeaderPassport",
       },
       new: {
-        [CipherType.Login]: "newItemHeaderLogin",
-        [CipherType.Card]: "newItemHeaderCard",
-        [CipherType.Identity]: "newItemHeaderIdentity",
-        [CipherType.SecureNote]: "newItemHeaderNote",
-        [CipherType.SshKey]: "newItemHeaderSshKey",
-        [CipherType.BankAccount]: "newItemHeaderBankAccount",
-        [CipherType.DriversLicense]: "newItemHeaderDriversLicense",
-        [CipherType.Passport]: "newItemHeaderPassport",
+        [CipherType.Login]: "addItemHeaderLogin",
+        [CipherType.Card]: "addItemHeaderCard",
+        [CipherType.Identity]: "addItemHeaderIdentity",
+        [CipherType.SecureNote]: this.pm32009NewItemTypes()
+          ? "addItemHeaderSecureNote"
+          : "addItemHeaderNote",
+        [CipherType.SshKey]: "addItemHeaderSshKey",
+        [CipherType.BankAccount]: "addItemHeaderBankAccount",
+        [CipherType.DriversLicense]: "addItemHeaderDriversLicense",
+        [CipherType.Passport]: "addItemHeaderPassport",
       },
       edit: {
-        [CipherType.Login]: "editItemHeaderLogin",
-        [CipherType.Card]: "editItemHeaderCard",
-        [CipherType.Identity]: "editItemHeaderIdentity",
-        [CipherType.SecureNote]: "editItemHeaderNote",
+        [CipherType.Login]: "editItemHeaderLoginSentenceCase",
+        [CipherType.Card]: "editItemHeaderCardSentenceCase",
+        [CipherType.Identity]: "editItemHeaderIdentitySentenceCase",
+        [CipherType.SecureNote]: this.pm32009NewItemTypes()
+          ? "editItemHeaderSecureNote"
+          : "editItemHeaderNoteSentenceCase",
         [CipherType.SshKey]: "editItemHeaderSshKey",
         [CipherType.BankAccount]: "editItemHeaderBankAccount",
         [CipherType.DriversLicense]: "editItemHeaderLicense",

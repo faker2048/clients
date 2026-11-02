@@ -138,26 +138,6 @@ describe("ApplicationHealthView", () => {
     });
   });
 
-  describe("getAtRiskPasswordCountForMember", () => {
-    it("should return the at-risk cipher count when the member is at-risk", () => {
-      const report = createReportWithCounts({ u1: true }, { c1: true, c2: true, c3: true }, 3);
-
-      expect(report.getAtRiskPasswordCountForMember("u1")).toBe(3);
-    });
-
-    it("should return 0 when the member is not at-risk in this application", () => {
-      const report = createReportWithCounts({ u1: false }, { c1: true, c2: true }, 2);
-
-      expect(report.getAtRiskPasswordCountForMember("u1")).toBe(0);
-    });
-
-    it("should return 0 when the member is not in the application's memberRefs", () => {
-      const report = createReportWithCounts({}, { c1: true }, 1);
-
-      expect(report.getAtRiskPasswordCountForMember("u1")).toBe(0);
-    });
-  });
-
   // ==================== Cipher Methods ====================
 
   describe("getAllCipherIds", () => {
@@ -261,16 +241,15 @@ describe("ApplicationHealthView", () => {
       expect(data.cipherRefs).not.toHaveProperty("c2");
     });
 
-    it("should set optional icon fields when provided", () => {
+    it("should create icon cipher when uri provided", () => {
       const data = new ApplicationHealthData();
       data.applicationName = "app.com";
       data.iconUri = "https://icons.example.com/app.ico";
-      data.iconCipherId = "cipher-123";
 
       const view = ApplicationHealthView.fromData(data);
 
-      expect(view.iconUri).toBe("https://icons.example.com/app.ico");
-      expect(view.iconCipherId).toBe("cipher-123");
+      expect(view.iconCipher).toBeDefined();
+      expect(view.iconCipher?.login.uris[0].uri).toBe("https://icons.example.com/app.ico");
     });
 
     it("should leave icon fields undefined when not set on data", () => {
@@ -279,8 +258,7 @@ describe("ApplicationHealthView", () => {
 
       const view = ApplicationHealthView.fromData(data);
 
-      expect(view.iconUri).toBeUndefined();
-      expect(view.iconCipherId).toBeUndefined();
+      expect(view.iconCipher).toBeUndefined();
     });
   });
 

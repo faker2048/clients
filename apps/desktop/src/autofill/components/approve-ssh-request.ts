@@ -27,8 +27,7 @@ export interface ApproveSshRequestParams {
 }
 
 export type ApproveSshRequestResult =
-  | { approved: true; remember: SshAgentRememberDuration }
-  | { approved: false };
+  { approved: true; remember: SshAgentRememberDuration } | { approved: false };
 
 // FIXME(https://bitwarden.atlassian.net/browse/CL-764): Migrate to OnPush
 // eslint-disable-next-line @angular-eslint/prefer-on-push-component-change-detection
