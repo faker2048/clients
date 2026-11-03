@@ -9,8 +9,7 @@
 
     <b>{{params.applicationName}}</b> {{ "sshkeyApprovalMessageInfix" | i18n }}
     <b>{{params.cipherName}}</b>
-    {{ "sshkeyApprovalMessageSuffix" | i18n }} {{ params.action | i18n }} @if (params.advanced &&
-    !params.isAgentForwarding) {
+    {{ "sshkeyApprovalMessageSuffix" | i18n }} {{ params.action | i18n }} @if (params.advanced) {
     <p class="tw-mt-4 tw-mb-2">{{ "sshAgentAdvancedRememberPrompt" | i18n }}</p>
     <div class="tw-flex tw-flex-wrap tw-gap-2">
       @for (option of rememberOptions; track option.duration) {
@@ -29,7 +28,7 @@
     }
   </div>
   <ng-container bitDialogFooter>
-    @if (params.advanced && !params.isAgentForwarding) {
+    @if (params.advanced) {
     <button
       type="button"
       bitButton

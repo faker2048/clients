@@ -837,6 +837,21 @@ describe("SshAgentService – sign request authorization", () => {
       await flush();
       expect(mockDialogOpen).toHaveBeenCalledTimes(2);
     });
+
+    it("remembers a forwarded approval only for the same remote host", async () => {
+      promptBehaviorSubject.next(SshAgentPromptType.Advanced);
+      mockDialogOpen.mockReturnValue({ closed: of({ approved: true, remember: "1h" }) });
+
+      sendSignRequest(true, "host-a");
+      await flush();
+      sendSignRequest(true, "host-a");
+      await flush();
+      expect(mockDialogOpen).toHaveBeenCalledTimes(1);
+
+      sendSignRequest(true, "host-b");
+      await flush();
+      expect(mockDialogOpen).toHaveBeenCalledTimes(2);
+    });
   });
 
   it("RememberUntilLock: shows dialog on first request for a cipher", async () => {
