@@ -702,6 +702,9 @@
   "sshAgentUnlockTimeout": {
     "message": "SSH key request timed out."
   },
+  "sshAgentApprovalTimeout": {
+    "message": "SSH request was not approved in time and has been denied."
+  },
   "enableSshAgent": {
     "message": "Enable SSH agent"
   },
@@ -746,6 +749,12 @@
   },
   "sshAgentRemember1d": {
     "message": "1 day"
+  },
+  "sshAgentRemember3d": {
+    "message": "3 days"
+  },
+  "sshAgentRemember7d": {
+    "message": "7 days"
   },
   "sshAgentManageKeysTitle": {
     "message": "Manage SSH keys"

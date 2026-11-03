@@ -1,4 +1,4 @@
-import { BehaviorSubject, EMPTY, Subject, of } from "rxjs";
+import { BehaviorSubject, EMPTY, NEVER, Subject, of } from "rxjs";
 
 import { AuthenticationStatus } from "@bitwarden/common/auth/enums/authentication-status";
 import { UserId } from "@bitwarden/common/types/guid";
@@ -747,6 +747,96 @@ describe("SshAgentService – sign request authorization", () => {
 
     expect(mockDialogOpen).toHaveBeenCalled();
     expect(mockSignRequestResponse).toHaveBeenCalledWith(REQUEST_ID, false);
+  });
+
+  // The agent stops waiting after its native approval timeout. A dialog left open past that point
+  // would hold back every later request, since requests are processed one at a time.
+  describe("approval timeout", () => {
+    it("closes an unanswered dialog and refuses once the agent has stopped waiting", async () => {
+      const mockClose = jest.fn();
+      mockDialogOpen.mockReturnValue({ closed: NEVER, close: mockClose });
+      service.SSH_SIGN_APPROVAL_TIMEOUT = 20;
+
+      sendSignRequest();
+      await flush();
+      expect(mockDialogOpen).toHaveBeenCalledTimes(1);
+      expect(mockSignRequestResponse).not.toHaveBeenCalled();
+
+      await new Promise((resolve) => setTimeout(resolve, 40));
+
+      expect(mockClose).toHaveBeenCalled();
+      expect(mockSignRequestResponse).toHaveBeenCalledWith(REQUEST_ID, false);
+      expect(mockShowToast).toHaveBeenCalledWith(expect.objectContaining({ variant: "error" }));
+    });
+
+    it("a timed-out dialog does not block the next request", async () => {
+      mockDialogOpen.mockReturnValueOnce({ closed: NEVER, close: jest.fn() });
+      service.SSH_SIGN_APPROVAL_TIMEOUT = 20;
+
+      sendSignRequest();
+      await flush();
+      await new Promise((resolve) => setTimeout(resolve, 40));
+
+      signRequestSubject.next({
+        cipherId: CIPHER_ID,
+        requestId: REQUEST_ID + 1,
+        processName: "test-app",
+        namespace: "",
+        isAgentForwarding: false,
+      });
+      await flush();
+
+      expect(mockDialogOpen).toHaveBeenCalledTimes(2);
+      expect(mockSignRequestResponse).toHaveBeenCalledWith(REQUEST_ID + 1, true);
+    });
+
+    it("refuses without prompting when the agent's wait already ran out", async () => {
+      signRequestSubject.next({
+        cipherId: CIPHER_ID,
+        requestId: REQUEST_ID,
+        processName: "test-app",
+        namespace: "",
+        isAgentForwarding: false,
+        requestedAt: Date.now() - service.SSH_SIGN_APPROVAL_TIMEOUT - 1,
+      });
+      await flush();
+
+      expect(mockDialogOpen).not.toHaveBeenCalled();
+      expect(mockFocusWindow).not.toHaveBeenCalled();
+      expect(mockSignRequestResponse).toHaveBeenCalledWith(REQUEST_ID, false);
+    });
+  });
+
+  describe("Advanced remember durations", () => {
+    afterEach(() => {
+      jest.restoreAllMocks();
+    });
+
+    it.each([
+      ["3d", 3 * 24 * 60 * 60 * 1000],
+      ["7d", 7 * 24 * 60 * 60 * 1000],
+    ])("remembers a %s approval until it expires", async (remember, ttlMs) => {
+      promptBehaviorSubject.next(SshAgentPromptType.Advanced);
+      mockDialogOpen.mockReturnValue({ closed: of({ approved: true, remember }) });
+      const start = Date.now();
+      const now = jest.spyOn(Date, "now").mockReturnValue(start);
+
+      sendSignRequest();
+      await flush();
+      expect(mockDialogOpen).toHaveBeenCalledTimes(1);
+
+      // Just before expiry: approved without a prompt.
+      now.mockReturnValue(start + ttlMs - 1);
+      sendSignRequest();
+      await flush();
+      expect(mockDialogOpen).toHaveBeenCalledTimes(1);
+
+      // At expiry: prompts again.
+      now.mockReturnValue(start + ttlMs);
+      sendSignRequest();
+      await flush();
+      expect(mockDialogOpen).toHaveBeenCalledTimes(2);
+    });
   });
 
   it("RememberUntilLock: shows dialog on first request for a cipher", async () => {

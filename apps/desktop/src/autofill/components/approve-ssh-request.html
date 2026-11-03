@@ -12,6 +12,20 @@
     {{ "sshkeyApprovalMessageSuffix" | i18n }} {{ params.action | i18n }} @if (params.advanced &&
     !params.isAgentForwarding) {
     <p class="tw-mt-4 tw-mb-2">{{ "sshAgentAdvancedRememberPrompt" | i18n }}</p>
+    <div class="tw-flex tw-flex-wrap tw-gap-2">
+      @for (option of rememberOptions; track option.duration) {
+      <button
+        type="button"
+        bitButton
+        bitFormButton
+        buttonType="secondary"
+        [id]="'approve-ssh-request_button_remember-' + option.duration"
+        [bitAction]="approveWith(option.duration)"
+      >
+        {{ option.labelKey | i18n }}
+      </button>
+      }
+    </div>
     }
   </div>
   <ng-container bitDialogFooter>
@@ -21,36 +35,10 @@
       bitButton
       bitFormButton
       buttonType="primary"
+      id="approve-ssh-request_button_remember-no"
       [bitAction]="approveWith(RememberDuration.No)"
     >
       {{ "sshAgentRememberNo" | i18n }}
-    </button>
-    <button
-      type="button"
-      bitButton
-      bitFormButton
-      buttonType="secondary"
-      [bitAction]="approveWith(RememberDuration.TenMinutes)"
-    >
-      {{ "sshAgentRemember10m" | i18n }}
-    </button>
-    <button
-      type="button"
-      bitButton
-      bitFormButton
-      buttonType="secondary"
-      [bitAction]="approveWith(RememberDuration.OneHour)"
-    >
-      {{ "sshAgentRemember1h" | i18n }}
-    </button>
-    <button
-      type="button"
-      bitButton
-      bitFormButton
-      buttonType="secondary"
-      [bitAction]="approveWith(RememberDuration.OneDay)"
-    >
-      {{ "sshAgentRemember1d" | i18n }}
     </button>
     } @else {
     <button type="submit" bitButton bitFormButton buttonType="primary">

@@ -12,6 +12,7 @@ import {
   from,
   map,
   of,
+  race,
   skip,
   Subject,
   switchMap,
@@ -19,6 +20,7 @@ import {
   takeUntil,
   tap,
   timeout,
+  timer,
   TimeoutError,
   withLatestFrom,
 } from "rxjs";
@@ -59,6 +61,9 @@ type AuthorizationScope = (typeof AuthorizationScope)[keyof typeof Authorization
 })
 export class SshAgentService implements OnDestroy {
   SSH_VAULT_UNLOCK_REQUEST_TIMEOUT = 60_000;
+  // Matches APPROVAL_CALLBACK_TIMEOUT in desktop_native/napi/src/sshagent.rs. After this, the agent
+  // has already refused the request, so an approval dialog still open for it is stale.
+  SSH_SIGN_APPROVAL_TIMEOUT = 60_000;
 
   // map of cipherId to (host cache key -> expiry epoch ms) for sign requests that have been authorized.
   // Infinity = until vault lock / account switch.
@@ -442,6 +447,17 @@ export class SshAgentService implements OnDestroy {
 
     const promptType = await firstValueFrom(this.desktopSettingsService.sshAgentPromptBehavior$);
     if (await this.needsAuthorization(cipherId, isAgentForwarding, promptType, hostFingerprint)) {
+      // Requests are processed one at a time, so a dialog left open after the agent gave up would
+      // hold back every later request. Only prompt for the time the agent is still waiting.
+      const requestedAt = (message.requestedAt as number | undefined) ?? Date.now();
+      const remainingMs = requestedAt + this.SSH_SIGN_APPROVAL_TIMEOUT - Date.now();
+      if (remainingMs <= 0) {
+        this.logService.info(
+          `[ssh-agent] approval window already expired cipherId=${cipherId} app=${application}`,
+        );
+        return ipc.autofill.sshAgent.signRequestResponse(requestId, false);
+      }
+
       ipc.platform.focusWindow();
       const dialogRef = ApproveSshRequestComponent.open(
         this.dialogService,
@@ -452,7 +468,21 @@ export class SshAgentService implements OnDestroy {
         promptType === SshAgentPromptType.Advanced,
       );
 
-      const result = await firstValueFrom(dialogRef.closed);
+      const result = await firstValueFrom(
+        race(dialogRef.closed, timer(remainingMs).pipe(map(() => "timedOut" as const))),
+      );
+      if (result === "timedOut") {
+        await dialogRef.close();
+        this.logService.info(
+          `[ssh-agent] approval timed out cipherId=${cipherId} app=${application}`,
+        );
+        this.toastService.showToast({
+          variant: "error",
+          title: null,
+          message: this.i18nService.t("sshAgentApprovalTimeout"),
+        });
+        return ipc.autofill.sshAgent.signRequestResponse(requestId, false);
+      }
       if (result?.approved) {
         this.logService.info(
           `[ssh-agent] approved cipherId=${cipherId} app=${application} remember=${result.remember} forward=${isAgentForwarding}`,

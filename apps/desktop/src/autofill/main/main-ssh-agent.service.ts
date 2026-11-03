@@ -103,6 +103,8 @@ export class MainSshAgentService {
         isAgentForwarding: data.signRequest.isForwarding,
         namespace: data.signRequest.namespace,
         hostFingerprint: data.signRequest.hostFingerprint,
+        // Lets the renderer close the approval dialog once the native approval timeout has passed.
+        requestedAt: Date.now(),
       });
     });
   }

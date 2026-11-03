@@ -156,6 +156,129 @@ describe("WindowMain", () => {
       expect(createWindow).toHaveBeenCalledWith("full-app", true);
     });
   });
+
+  describe("bringToForeground", () => {
+    const originalPlatform = process.platform;
+    let focusWindowCallback: jest.Mock;
+    let win: {
+      isMinimized: jest.Mock;
+      restore: jest.Mock;
+      show: jest.Mock;
+      focus: jest.Mock;
+      isAlwaysOnTop: jest.Mock;
+      setAlwaysOnTop: jest.Mock;
+      isFocused: jest.Mock;
+      flashFrame: jest.Mock;
+      once: jest.Mock;
+    };
+
+    function createSut(callback: (() => Promise<void>) | null) {
+      const sut = new WindowMain(
+        mock<BiometricStateService>(),
+        mock<LogService>(),
+        mock<AbstractStorageService>(),
+        mock<DesktopSettingsService>(),
+        mock<SafeShell>(),
+        null,
+        () => {},
+        callback,
+      );
+      sut.win = win as any;
+      return sut;
+    }
+
+    function bringToForeground(sut: WindowMain): Promise<void> {
+      return (sut as any).bringToForeground();
+    }
+
+    function setPlatform(platform: NodeJS.Platform) {
+      Object.defineProperty(process, "platform", { value: platform });
+    }
+
+    beforeEach(() => {
+      focusWindowCallback = jest.fn().mockResolvedValue(undefined);
+      win = {
+        isMinimized: jest.fn().mockReturnValue(false),
+        restore: jest.fn(),
+        show: jest.fn(),
+        focus: jest.fn(),
+        isAlwaysOnTop: jest.fn().mockReturnValue(false),
+        setAlwaysOnTop: jest.fn(),
+        isFocused: jest.fn().mockReturnValue(true),
+        flashFrame: jest.fn(),
+        once: jest.fn(),
+      };
+    });
+
+    afterEach(() => {
+      setPlatform(originalPlatform);
+    });
+
+    it("restores through the tray callback when one is provided", async () => {
+      setPlatform("linux");
+      const sut = createSut(focusWindowCallback);
+
+      await bringToForeground(sut);
+
+      expect(focusWindowCallback).toHaveBeenCalledTimes(1);
+      expect(win.show).not.toHaveBeenCalled();
+    });
+
+    it("unminimizes the window when no tray callback is provided", async () => {
+      setPlatform("linux");
+      win.isMinimized.mockReturnValue(true);
+      const sut = createSut(null);
+
+      await bringToForeground(sut);
+
+      expect(win.restore).toHaveBeenCalled();
+      expect(win.show).toHaveBeenCalled();
+      expect(win.focus).toHaveBeenCalled();
+    });
+
+    it("does not touch the topmost state outside Windows", async () => {
+      setPlatform("darwin");
+      const sut = createSut(focusWindowCallback);
+
+      await bringToForeground(sut);
+
+      expect(win.setAlwaysOnTop).not.toHaveBeenCalled();
+    });
+
+    it("on Windows, briefly makes the window topmost and then restores the previous state", async () => {
+      setPlatform("win32");
+      const sut = createSut(focusWindowCallback);
+
+      await bringToForeground(sut);
+
+      expect(win.setAlwaysOnTop.mock.calls).toEqual([[true], [false]]);
+      expect(win.flashFrame).not.toHaveBeenCalled();
+    });
+
+    it("on Windows, keeps the window on top when the user enabled always on top", async () => {
+      setPlatform("win32");
+      win.isAlwaysOnTop.mockReturnValue(true);
+      const sut = createSut(focusWindowCallback);
+
+      await bringToForeground(sut);
+
+      expect(win.setAlwaysOnTop.mock.calls).toEqual([[true], [true]]);
+    });
+
+    it("on Windows, flashes the taskbar until focused when focus is refused", async () => {
+      setPlatform("win32");
+      win.isFocused.mockReturnValue(false);
+      const sut = createSut(focusWindowCallback);
+
+      await bringToForeground(sut);
+
+      expect(win.flashFrame).toHaveBeenCalledWith(true);
+      expect(win.once).toHaveBeenCalledWith("focus", expect.any(Function));
+
+      win.once.mock.calls[0][1]();
+      expect(win.flashFrame).toHaveBeenLastCalledWith(false);
+    });
+  });
 });
 
 describe("isConfinedSnap", () => {

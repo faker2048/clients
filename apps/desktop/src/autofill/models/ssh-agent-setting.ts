@@ -12,6 +12,8 @@ export const SshAgentRememberDuration = Object.freeze({
   TenMinutes: "10m",
   OneHour: "1h",
   OneDay: "1d",
+  ThreeDays: "3d",
+  SevenDays: "7d",
 } as const);
 
 export type SshAgentRememberDuration =
@@ -27,6 +29,10 @@ export function rememberDurationMs(d: SshAgentRememberDuration): number {
       return 60 * 60 * 1000;
     case SshAgentRememberDuration.OneDay:
       return 24 * 60 * 60 * 1000;
+    case SshAgentRememberDuration.ThreeDays:
+      return 3 * 24 * 60 * 60 * 1000;
+    case SshAgentRememberDuration.SevenDays:
+      return 7 * 24 * 60 * 60 * 1000;
   }
 }
 

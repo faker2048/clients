@@ -49,6 +49,13 @@ export type ApproveSshRequestResult =
 export class ApproveSshRequestComponent {
   approveSshRequestForm = this.formBuilder.group({});
   readonly RememberDuration = SshAgentRememberDuration;
+  protected readonly rememberOptions: { duration: SshAgentRememberDuration; labelKey: string }[] = [
+    { duration: SshAgentRememberDuration.TenMinutes, labelKey: "sshAgentRemember10m" },
+    { duration: SshAgentRememberDuration.OneHour, labelKey: "sshAgentRemember1h" },
+    { duration: SshAgentRememberDuration.OneDay, labelKey: "sshAgentRemember1d" },
+    { duration: SshAgentRememberDuration.ThreeDays, labelKey: "sshAgentRemember3d" },
+    { duration: SshAgentRememberDuration.SevenDays, labelKey: "sshAgentRemember7d" },
+  ];
 
   constructor(
     @Inject(DIALOG_DATA) protected params: ApproveSshRequestParams,

@@ -155,6 +155,7 @@ describe("MainSshAgentService", () => {
         isAgentForwarding: false,
         namespace: "ssh",
         hostFingerprint: undefined,
+        requestedAt: expect.any(Number),
       });
     });
 

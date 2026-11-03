@@ -171,11 +171,8 @@ export class WindowMain {
       }
     });
 
-    ipcMain.on("window-focus", () => {
-      if (this.win != null) {
-        this.win.show();
-        this.win.focus();
-      }
+    ipcMain.on("window-focus", async () => {
+      await this.bringToForeground();
     });
 
     ipcMain.on("window-hide", () => {
@@ -439,6 +436,43 @@ export class WindowMain {
     }
 
     return isLinux() ? path.join(__dirname, "/images/icon.png") : undefined;
+  }
+
+  /**
+   * Brings the window to the front for a prompt that needs the user's attention (e.g. SSH sign
+   * approval), even when it is minimized, hidden to the tray or behind another application.
+   *
+   * On Windows, the foreground lock turns a plain focus() from a background process into a taskbar
+   * flash, so the window is briefly made topmost to surface it, and the taskbar flashes until the
+   * user focuses it if Windows still refuses focus.
+   */
+  private async bringToForeground() {
+    if (this.focusWindowCallback != null) {
+      // Restores from tray, unminimizes and recreates the window if needed.
+      await this.focusWindowCallback();
+    } else if (this.win != null) {
+      if (this.win.isMinimized()) {
+        this.win.restore();
+      }
+      this.win.show();
+      this.win.focus();
+    }
+
+    const win = this.win;
+    if (win == null || !isWindows()) {
+      return;
+    }
+
+    // Respect the user's "always on top" setting when undoing the temporary topmost state.
+    const wasAlwaysOnTop = win.isAlwaysOnTop();
+    win.setAlwaysOnTop(true);
+    win.focus();
+    win.setAlwaysOnTop(wasAlwaysOnTop);
+
+    if (!win.isFocused()) {
+      win.flashFrame(true);
+      win.once("focus", () => win.flashFrame(false));
+    }
   }
 
   /**
