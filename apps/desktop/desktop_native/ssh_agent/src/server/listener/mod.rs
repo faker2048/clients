@@ -6,6 +6,8 @@ pub(crate) mod unix;
 #[cfg(windows)]
 pub(crate) mod windows;
 
+use std::time::Duration;
+
 use anyhow::Result;
 use tokio::{
     io::{AsyncRead, AsyncWrite},
@@ -15,6 +17,9 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, error};
 
 use super::connection::Connection;
+
+/// Pause after a failed `accept()` before trying again.
+const ACCEPT_RETRY_DELAY: Duration = Duration::from_millis(100);
 
 /// Implementors handle platform-specific socket/pipe creation and connection acceptance.
 #[async_trait::async_trait]
@@ -66,13 +71,69 @@ pub(crate) fn spawn_listener_tasks<L>(
                                 break;
                             }
                         }
-                        // Continue to retry on transient errors
+                        // Continue to retry on transient errors, pausing first so an error
+                        // that recurs immediately cannot spin this task at 100% CPU
                         Err(error) => {
                             error!(%error, "Listener accept failed");
+                            tokio::select! {
+                                () = token.cancelled() => break,
+                                () = tokio::time::sleep(ACCEPT_RETRY_DELAY) => {}
+                            }
                         }
                     }
                 }
             }
         });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc,
+    };
+
+    use anyhow::anyhow;
+    use tokio::io::DuplexStream;
+
+    use super::*;
+
+    struct FailingListener {
+        attempts: Arc<AtomicUsize>,
+    }
+
+    #[async_trait::async_trait]
+    impl Listener for FailingListener {
+        type Stream = DuplexStream;
+
+        async fn accept(&mut self) -> Result<Connection<Self::Stream>> {
+            self.attempts.fetch_add(1, Ordering::SeqCst);
+            Err(anyhow!("accept failed"))
+        }
+    }
+
+    #[tokio::test]
+    async fn test_accept_errors_are_retried_with_delay() {
+        let attempts = Arc::new(AtomicUsize::new(0));
+        let (tx, _rx) = tokio::sync::mpsc::channel(1);
+        let token = CancellationToken::new();
+
+        spawn_listener_tasks(
+            vec![FailingListener {
+                attempts: Arc::clone(&attempts),
+            }],
+            &tx,
+            &token,
+        );
+        tokio::time::sleep(ACCEPT_RETRY_DELAY * 3 + ACCEPT_RETRY_DELAY / 2).await;
+        token.cancel();
+
+        // Without the delay this loop spins and records a huge number of attempts
+        let count = attempts.load(Ordering::SeqCst);
+        assert!(
+            (1..=5).contains(&count),
+            "unexpected accept attempts: {count}"
+        );
     }
 }
