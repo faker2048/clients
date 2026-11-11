@@ -1,4 +1,5 @@
-import { Component, Input } from "@angular/core";
+import { Component, inject, Input } from "@angular/core";
+import { toSignal } from "@angular/core/rxjs-interop";
 import { firstValueFrom, Observable, of, switchMap, lastValueFrom } from "rxjs";
 
 import { PremiumBadgeComponent } from "@bitwarden/angular/billing/components/premium-badge";
@@ -17,6 +18,7 @@ import {
   SendAddEditDialogComponent,
   SendFormService,
   SendItemDialogResult,
+  SendPolicyService,
 } from "@bitwarden/send-ui";
 import { I18nPipe } from "@bitwarden/ui-common";
 
@@ -63,6 +65,15 @@ export class NewSendDropdownComponent {
     );
   }
 
+  private readonly sendPolicyService = inject(SendPolicyService);
+  protected readonly allowedSendTypes = toSignal(this.sendPolicyService.allowedSendTypes$, {
+    initialValue: [SendType.Text, SendType.File],
+  });
+
+  get title() {
+    return this.hideIcon ? "createSendV2" : "create";
+  }
+
   /**
    * Opens the SendAddEditComponent for a new Send with the provided type.
    * If has user does not have premium access and the type is File do nothing the PremiumBadgeComponent will handle the flow.
@@ -80,6 +91,7 @@ export class NewSendDropdownComponent {
     if (sendFormDialogRef) {
       this.sendFormDialogRef = sendFormDialogRef;
       const result = await lastValueFrom(this.sendFormDialogRef.closed);
+      this.sendFormDialogRef = undefined;
       if (result?.result === SendItemDialogResult.Created && result?.send) {
         await this.dialogService.openDrawer(SendSuccessDrawerDialogComponent, {
           data: result.send,
@@ -94,5 +106,11 @@ export class NewSendDropdownComponent {
       return closeResult.closed;
     }
     return true;
+  }
+
+  /** Called when SendType is restricted to a single type — create it immediately */
+  async onRestrictedClick() {
+    const allowedSendTypes = this.allowedSendTypes();
+    await this.createSend(allowedSendTypes[0]);
   }
 }

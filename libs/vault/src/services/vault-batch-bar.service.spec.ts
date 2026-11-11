@@ -1,3 +1,4 @@
+import { signal } from "@angular/core";
 import { TestBed } from "@angular/core/testing";
 import { mock, MockProxy } from "jest-mock-extended";
 import { BehaviorSubject, of } from "rxjs";
@@ -24,6 +25,10 @@ import {
   AssignCollectionsResult,
 } from "../tokens/assign-collections-dialog.token";
 import { BULK_DELETE_DIALOG, BulkDeleteDialogResult } from "../tokens/bulk-delete-dialog.token";
+import {
+  BULK_EDIT_COLLECTION_ACCESS_DIALOG,
+  BulkEditCollectionAccessResult,
+} from "../tokens/bulk-edit-collection-access-dialog.token";
 
 import { PasswordRepromptService } from "./password-reprompt.service";
 import { RoutedVaultFilterBridgeService } from "./routed-vault-filter-bridge.service";
@@ -50,6 +55,7 @@ function makeCipherItem(overrides: Partial<CipherView> = {}): VaultItem<CipherVi
 function makeCollection(
   overrides: Partial<CollectionView> = {},
   canDeleteResult = true,
+  canEditResult = true,
 ): CollectionView {
   const col = new CollectionView({
     id: "col-1" as any,
@@ -58,6 +64,7 @@ function makeCollection(
   } as any);
   Object.assign(col, overrides);
   jest.spyOn(col, "canDelete").mockReturnValue(canDeleteResult);
+  jest.spyOn(col, "canEdit").mockReturnValue(canEditResult);
   return col;
 }
 
@@ -80,7 +87,7 @@ function makeOrg(overrides: Partial<Organization> = {}): Organization {
 }
 
 function makeConfig(overrides: Partial<VaultBatchBarConfig> = {}): VaultBatchBarConfig {
-  return { isOrgVault: false, allCollections: [], hasCiphers: true, ...overrides };
+  return { isOrgVault: false, allCollections: [], hasCiphers: true, inTrash: false, ...overrides };
 }
 
 describe("VaultBatchBarService", () => {
@@ -98,6 +105,7 @@ describe("VaultBatchBarService", () => {
   let userCanArchiveSubject: BehaviorSubject<boolean>;
   let mockAssignCollectionsDialogOpen: jest.Mock;
   let mockBulkDeleteDialogOpen: jest.Mock;
+  let mockBulkEditCollectionAccessDialogOpen: jest.Mock;
   let activeFilterSubject: BehaviorSubject<RoutedVaultFilterModel>;
 
   beforeEach(() => {
@@ -118,6 +126,7 @@ describe("VaultBatchBarService", () => {
     mockAccountService.activeAccount$ = of({ id: userId } as Account);
     mockAssignCollectionsDialogOpen = jest.fn();
     mockBulkDeleteDialogOpen = jest.fn();
+    mockBulkEditCollectionAccessDialogOpen = jest.fn();
     mockOrganizationService.organizations$.mockReturnValue(organizationsSubject);
     mockCipherArchiveService.userCanArchive$.mockReturnValue(userCanArchiveSubject);
     mockPasswordRepromptService.showPasswordPrompt.mockResolvedValue(true);
@@ -145,10 +154,68 @@ describe("VaultBatchBarService", () => {
         { provide: LogService, useValue: mock<LogService>() },
         { provide: ASSIGN_COLLECTIONS_DIALOG, useValue: { open: mockAssignCollectionsDialogOpen } },
         { provide: BULK_DELETE_DIALOG, useValue: { open: mockBulkDeleteDialogOpen } },
+        {
+          provide: BULK_EDIT_COLLECTION_ACCESS_DIALOG,
+          useValue: { open: mockBulkEditCollectionAccessDialogOpen },
+        },
       ],
     });
 
     service = TestBed.inject(VaultBatchBarService) as VaultBatchBarService<CipherView>;
+  });
+
+  describe("without the routed filter services", () => {
+    // VFO1 hosts provide neither service; the bar must fall back to the config alone.
+    beforeEach(() => {
+      TestBed.resetTestingModule();
+      TestBed.configureTestingModule({
+        providers: [
+          VaultBatchBarService,
+          { provide: CipherService, useValue: mockCipherService },
+          { provide: CipherArchiveService, useValue: mockCipherArchiveService },
+          { provide: CipherAuthorizationService, useValue: mockCipherAuthorizationService },
+          { provide: OrganizationService, useValue: mockOrganizationService },
+          { provide: PasswordRepromptService, useValue: mockPasswordRepromptService },
+          { provide: DialogService, useValue: mockDialogService },
+          { provide: ToastService, useValue: mockToastService },
+          { provide: AccountService, useValue: mockAccountService },
+          { provide: I18nService, useValue: { t: (key: string) => key } },
+          { provide: LogService, useValue: mock<LogService>() },
+          {
+            provide: ASSIGN_COLLECTIONS_DIALOG,
+            useValue: { open: mockAssignCollectionsDialogOpen },
+          },
+          { provide: BULK_DELETE_DIALOG, useValue: { open: mockBulkDeleteDialogOpen } },
+        ],
+      });
+
+      service = TestBed.inject(VaultBatchBarService) as VaultBatchBarService<CipherView>;
+    });
+
+    it("constructs without them", () => {
+      expect(service).toBeTruthy();
+    });
+
+    it("takes trash state from the config, since there is no filter to read", () => {
+      expect(service.inTrash()).toBe(false);
+
+      service.setConfig(makeConfig({ inTrash: true }));
+
+      expect(service.inTrash()).toBe(true);
+    });
+
+    it("assigns to collections using the config's scope and the ciphers' organization", async () => {
+      const cipher = makeCipher({ organizationId: orgId });
+      service.setConfig(makeConfig({ hasCiphers: true }));
+      service.selection.select({ cipher } as VaultItem<CipherView>);
+      mockAssignCollectionsDialogOpen.mockResolvedValue(AssignCollectionsResult.Saved);
+
+      await service.bulkAssignToCollections();
+
+      expect(mockAssignCollectionsDialogOpen).toHaveBeenCalledWith(
+        expect.objectContaining({ organizationId: orgId }),
+      );
+    });
   });
 
   describe("setConfig()", () => {
@@ -159,6 +226,152 @@ describe("VaultBatchBarService", () => {
       service.setConfig(makeConfig({ hasCiphers: true, isOrgVault: true }));
       service.selection.select(makeCipherItem());
       expect(service.canAssignToCollections()).toBe(true);
+    });
+  });
+
+  describe("inTrash", () => {
+    it("reads the route filter when the config says nothing", () => {
+      filterSubject.next({ type: "trash" });
+
+      expect(service.inTrash()).toBe(true);
+    });
+
+    it("is false when neither the filter nor the config says trash", () => {
+      expect(service.inTrash()).toBe(false);
+    });
+
+    it("takes the config's answer over the filter's", () => {
+      service.setConfig(makeConfig({ inTrash: true }));
+
+      expect(service.inTrash()).toBe(true);
+    });
+
+    it("lets the config say a filtered-to-trash page is not trash", () => {
+      filterSubject.next({ type: "trash" });
+      service.setConfig(makeConfig({ inTrash: false }));
+
+      expect(service.inTrash()).toBe(false);
+    });
+
+    it("makes bulkDelete permanent when the config says trash", async () => {
+      service.setConfig(makeConfig({ inTrash: true }));
+      service.selection.select(makeCipherItem());
+      mockCipherAuthorizationService.canDeleteCipher$.mockReturnValue(of(true));
+      mockBulkDeleteDialogOpen.mockResolvedValue(BulkDeleteDialogResult.Canceled);
+
+      await service.bulkDelete();
+
+      expect(mockBulkDeleteDialogOpen).toHaveBeenCalledWith(
+        expect.objectContaining({ permanent: true }),
+      );
+    });
+  });
+
+  describe("registerSelection()", () => {
+    function sourceDouble(initial: VaultItem<CipherView>[] = []) {
+      const selected = signal<readonly VaultItem<CipherView>[]>(initial);
+      return {
+        selected: selected.asReadonly(),
+        clear: jest.fn(() => selected.set([])),
+        set: (items: VaultItem<CipherView>[]) => selected.set(items),
+      };
+    }
+
+    it("reads the registered source instead of the CDK model", () => {
+      const item = makeCipherItem();
+      const source = sourceDouble([item]);
+
+      service.registerSelection(source);
+
+      expect(service.selected()).toEqual([item]);
+      expect(service.selectedCount()).toBe(1);
+    });
+
+    it("ignores the CDK model entirely while a source is registered", () => {
+      const source = sourceDouble([]);
+      service.registerSelection(source);
+
+      service.selection.select(makeCipherItem());
+
+      expect(service.selected()).toEqual([]);
+    });
+
+    it("tracks the source reactively, so permission signals follow it", () => {
+      const source = sourceDouble([]);
+      service.registerSelection(source);
+      expect(service.canAddToFolder()).toBe(false);
+
+      source.set([makeCipherItem()]);
+
+      expect(service.selectedCount()).toBe(1);
+      expect(service.canAddToFolder()).toBe(true);
+    });
+
+    it("drives the async canDelete pipeline from the registered source", async () => {
+      const source = sourceDouble([]);
+      service.registerSelection(source);
+
+      mockCipherAuthorizationService.canDeleteCipher$.mockReturnValue(of(false));
+      source.set([makeCipherItem()]);
+      // The pipeline is async, so let the switchMap settle before asserting.
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(service.canDelete()).toBe(false);
+
+      mockCipherAuthorizationService.canDeleteCipher$.mockReturnValue(of(true));
+      source.set([makeCipherItem({ id: "cipher-9" as unknown as CipherId })]);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(service.canDelete()).toBe(true);
+    });
+
+    it("clears the source rather than the CDK model", async () => {
+      const source = sourceDouble([makeCipherItem()]);
+      service.registerSelection(source);
+      mockDialogService.open.mockReturnValue({
+        closed: of(BulkMoveDialogResult.Moved),
+      } as any);
+
+      await service.bulkMoveToFolder();
+
+      expect(source.clear).toHaveBeenCalled();
+      expect(service.selectedCount()).toBe(0);
+    });
+
+    it("restores the CDK model when the source is deregistered", () => {
+      const item = makeCipherItem();
+      const source = sourceDouble([item]);
+
+      const teardown = service.registerSelection(source);
+      expect(service.selected()).toEqual([item]);
+
+      teardown();
+
+      expect(service.selected()).toEqual([]);
+      service.selection.select(item);
+      expect(service.selected()).toEqual([item]);
+    });
+
+    it("does not let a stale teardown retract a newer source", () => {
+      const first = sourceDouble([]);
+      const second = sourceDouble([makeCipherItem()]);
+
+      const teardownFirst = service.registerSelection(first);
+      service.registerSelection(second);
+      teardownFirst();
+
+      expect(service.selectedCount()).toBe(1);
+    });
+  });
+
+  describe("selection identity", () => {
+    it("recognises two VaultItem wrappers with the same cipher ID as the same selection", () => {
+      const item1: VaultItem<CipherView> = { cipher: makeCipher() };
+      const item2: VaultItem<CipherView> = { cipher: makeCipher() };
+
+      service.selection.select(item1);
+
+      expect(service.selection.isSelected(item2)).toBe(true);
     });
   });
 
@@ -193,6 +406,18 @@ describe("VaultBatchBarService", () => {
       expect(service.selectedCiphers()[0]).toBe(cipherItem.cipher);
     });
 
+    it("selectedCiphers excludes partial (PAM-gated) ciphers so no bulk action can modify them", () => {
+      const normalItem = makeCipherItem();
+      const partialItem = makeCipherItem({
+        id: "partial" as unknown as CipherId,
+        partial: true,
+      });
+
+      service.selection.select(normalItem, partialItem);
+
+      expect(service.selectedCiphers()).toEqual([normalItem.cipher]);
+    });
+
     it("selectedCollections returns only items with a collection", () => {
       const cipherItem = makeCipherItem();
       const collectionItem = makeCollectionItem();
@@ -201,6 +426,27 @@ describe("VaultBatchBarService", () => {
 
       expect(service.selectedCollections()).toHaveLength(1);
       expect(service.selectedCollections()[0]).toBe(collectionItem.collection);
+    });
+  });
+
+  describe("barVisible()", () => {
+    it("returns false when nothing is selected", () => {
+      expect(service.barVisible()).toBe(false);
+    });
+
+    it("returns true when at least one item is selected", () => {
+      service.selection.select(makeCipherItem());
+
+      expect(service.barVisible()).toBe(true);
+    });
+
+    it("returns false after selection is cleared", () => {
+      service.selection.select(makeCipherItem());
+
+      expect(service.barVisible()).toBe(true);
+      service.selection.clear();
+
+      expect(service.barVisible()).toBe(false);
     });
   });
 
@@ -216,7 +462,7 @@ describe("VaultBatchBarService", () => {
     });
 
     it("returns false when filter type is trash", () => {
-      filterSubject.next({ type: "trash" });
+      service.setConfig(makeConfig({ inTrash: true }));
 
       service.selection.select(makeCipherItem());
 
@@ -259,7 +505,7 @@ describe("VaultBatchBarService", () => {
     });
 
     it("returns false when in trash view", () => {
-      filterSubject.next({ type: "trash" });
+      service.setConfig(makeConfig({ inTrash: true }));
       userCanArchiveSubject.next(true);
 
       service.selection.select(makeCipherItem());
@@ -267,12 +513,12 @@ describe("VaultBatchBarService", () => {
       expect(service.canArchive()).toBe(false);
     });
 
-    it("returns false when any cipher has an organizationId", () => {
+    it("returns true when an org cipher is selected and userCanArchive is true", () => {
       userCanArchiveSubject.next(true);
 
       service.selection.select(makeCipherItem({ organizationId: orgId }));
 
-      expect(service.canArchive()).toBe(false);
+      expect(service.canArchive()).toBe(true);
     });
 
     it("returns false when any cipher has an archivedDate", () => {
@@ -290,6 +536,15 @@ describe("VaultBatchBarService", () => {
 
       expect(service.canArchive()).toBe(true);
     });
+
+    it("returns false when in org vault (admin console)", () => {
+      userCanArchiveSubject.next(true);
+      service.setConfig(makeConfig({ isOrgVault: true }));
+
+      service.selection.select(makeCipherItem({ organizationId: orgId }));
+
+      expect(service.canArchive()).toBe(false);
+    });
   });
 
   describe("canUnarchive", () => {
@@ -298,7 +553,7 @@ describe("VaultBatchBarService", () => {
     });
 
     it("returns false when in trash view", () => {
-      filterSubject.next({ type: "trash" });
+      service.setConfig(makeConfig({ inTrash: true }));
 
       service.selection.select(makeCipherItem({ archivedDate: new Date() }));
 
@@ -311,16 +566,24 @@ describe("VaultBatchBarService", () => {
       expect(service.canUnarchive()).toBe(false);
     });
 
-    it("returns false when any cipher has an organizationId", () => {
+    it("returns true when an archived org cipher is selected", () => {
       service.selection.select(makeCipherItem({ archivedDate: new Date(), organizationId: orgId }));
 
-      expect(service.canUnarchive()).toBe(false);
+      expect(service.canUnarchive()).toBe(true);
     });
 
     it("returns true when all selected ciphers are archived personal items", () => {
       service.selection.select(makeCipherItem({ archivedDate: new Date() }));
 
       expect(service.canUnarchive()).toBe(true);
+    });
+
+    it("returns false when in org vault (admin console)", () => {
+      service.setConfig(makeConfig({ isOrgVault: true }));
+
+      service.selection.select(makeCipherItem({ archivedDate: new Date(), organizationId: orgId }));
+
+      expect(service.canUnarchive()).toBe(false);
     });
   });
 
@@ -343,7 +606,7 @@ describe("VaultBatchBarService", () => {
     });
 
     it("returns true when in trash view and all ciphers pass canRestoreCipher$", () => {
-      filterSubject.next({ type: "trash" });
+      service.setConfig(makeConfig({ inTrash: true }));
 
       service.selection.select(makeCipherItem());
       TestBed.tick();
@@ -352,7 +615,7 @@ describe("VaultBatchBarService", () => {
     });
 
     it("returns false when not in trash view even if ciphers pass canRestoreCipher$", () => {
-      filterSubject.next({});
+      service.setConfig(makeConfig({ inTrash: false }));
       service.selection.select(makeCipherItem());
       TestBed.tick();
 
@@ -360,7 +623,7 @@ describe("VaultBatchBarService", () => {
     });
 
     it("returns false when a cipher fails canRestoreCipher$", () => {
-      filterSubject.next({ type: "trash" });
+      service.setConfig(makeConfig({ inTrash: true }));
       mockCipherAuthorizationService.canRestoreCipher$.mockReturnValue(of(false));
 
       service.selection.select(makeCipherItem());
@@ -441,9 +704,15 @@ describe("VaultBatchBarService", () => {
       expect(service.canAssignToCollections()).toBe(true);
     });
 
+    it("returns false for org vault when only collections are selected", () => {
+      service.setConfig(makeConfig({ hasCiphers: true, isOrgVault: true }));
+      service.selection.select(makeCollectionItem());
+
+      expect(service.canAssignToCollections()).toBe(false);
+    });
+
     it("returns false when in trash view", () => {
-      filterSubject.next({ type: "trash" });
-      service.setConfig(makeConfig({ hasCiphers: true }));
+      service.setConfig(makeConfig({ hasCiphers: true, inTrash: true }));
       organizationsSubject.next([makeOrg()]);
 
       service.selection.select(makeCipherItem());
@@ -727,23 +996,23 @@ describe("VaultBatchBarService", () => {
       expect(mockCipherService.restoreManyWithServer).toHaveBeenCalledWith([cipher.id], userId);
     });
 
-    it("shows 'restoredItems' toast when ciphers are not archived", async () => {
+    it("shows 'restoredItem' toast when a single cipher is not archived", async () => {
       service.selection.select(makeCipherItem());
 
       await service.bulkRestore();
 
       expect(mockToastService.showToast).toHaveBeenCalledWith(
-        expect.objectContaining({ message: "restoredItems" }),
+        expect.objectContaining({ message: "restoredItem" }),
       );
     });
 
-    it("shows 'archivedItemsRestored' toast when all ciphers are archived", async () => {
+    it("shows 'archivedItemRestored' toast when a single archived cipher is restored", async () => {
       service.selection.select(makeCipherItem({ archivedDate: new Date() }));
 
       await service.bulkRestore();
 
       expect(mockToastService.showToast).toHaveBeenCalledWith(
-        expect.objectContaining({ message: "archivedItemsRestored" }),
+        expect.objectContaining({ message: "archivedItemRestored" }),
       );
     });
 
@@ -829,6 +1098,20 @@ describe("VaultBatchBarService", () => {
       );
     });
 
+    it("excludes partial (PAM-gated) ciphers from the delete", async () => {
+      service.selection.select(
+        makeCipherItem({ id: "normal" as unknown as CipherId }),
+        makeCipherItem({ id: "partial" as unknown as CipherId, partial: true }),
+      );
+      mockBulkDeleteDialogOpen.mockResolvedValue(BulkDeleteDialogResult.Canceled);
+
+      await service.bulkDelete();
+
+      expect(mockBulkDeleteDialogOpen).toHaveBeenCalledWith(
+        expect.objectContaining({ cipherIds: ["normal"] }),
+      );
+    });
+
     it("passes isOrgVault to canDeleteCipher$", async () => {
       service.setConfig(makeConfig({ isOrgVault: true, organization: makeOrg() }));
       service.selection.select(makeCipherItem({ organizationId: orgId }));
@@ -866,7 +1149,7 @@ describe("VaultBatchBarService", () => {
     });
 
     it("opens BulkDeleteDialog with permanent=true in trash", async () => {
-      filterSubject.next({ type: "trash" });
+      service.setConfig(makeConfig({ inTrash: true }));
       service.selection.select(makeCipherItem());
       mockBulkDeleteDialogOpen.mockResolvedValue(BulkDeleteDialogResult.Canceled);
 
@@ -994,6 +1277,129 @@ describe("VaultBatchBarService", () => {
       mockAssignCollectionsDialogOpen.mockResolvedValue(AssignCollectionsResult.Canceled);
 
       await service.bulkAssignToCollections();
+
+      expect(service.selectedCount()).toBe(1);
+    });
+
+    it("takes the active collection from the config when the route filter names none", async () => {
+      const collection = makeCollection();
+      service.setConfig(
+        makeConfig({ allCollections: [collection], activeCollectionId: collection.id }),
+      );
+      service.selection.select({ cipher: makeCipher() });
+      mockAssignCollectionsDialogOpen.mockResolvedValue(AssignCollectionsResult.Canceled);
+
+      await service.bulkAssignToCollections();
+
+      expect(mockAssignCollectionsDialogOpen).toHaveBeenCalledWith(
+        expect.objectContaining({ activeCollection: collection }),
+      );
+    });
+
+    it("falls back to the route filter's collection when the config names none", async () => {
+      const collection = makeCollection();
+      service.setConfig(makeConfig({ allCollections: [collection] }));
+      activeFilterSubject.next({ collectionId: collection.id });
+      service.selection.select({ cipher: makeCipher() });
+      mockAssignCollectionsDialogOpen.mockResolvedValue(AssignCollectionsResult.Canceled);
+
+      await service.bulkAssignToCollections();
+
+      expect(mockAssignCollectionsDialogOpen).toHaveBeenCalledWith(
+        expect.objectContaining({ activeCollection: collection }),
+      );
+    });
+  });
+
+  describe("canEditCollectionAccess", () => {
+    it("returns false when not isOrgVault", () => {
+      service.setConfig(makeConfig({ isOrgVault: false }));
+      service.selection.select(makeCollectionItem());
+
+      expect(service.canEditCollectionAccess()).toBe(false);
+    });
+
+    it("returns false when selection is empty", () => {
+      service.setConfig(makeConfig({ isOrgVault: true }));
+
+      expect(service.canEditCollectionAccess()).toBe(false);
+    });
+
+    it("returns false when selection contains only ciphers", () => {
+      service.setConfig(makeConfig({ isOrgVault: true }));
+      service.selection.select(makeCipherItem());
+
+      expect(service.canEditCollectionAccess()).toBe(false);
+    });
+
+    it("returns true when isOrgVault and selection contains a collection", () => {
+      service.setConfig(makeConfig({ isOrgVault: true }));
+      service.selection.select(makeCollectionItem());
+
+      expect(service.canEditCollectionAccess()).toBe(true);
+    });
+
+    it("returns true when isOrgVault and selection contains both a cipher and a collection", () => {
+      service.setConfig(makeConfig({ isOrgVault: true }));
+      service.selection.select(makeCipherItem(), makeCollectionItem());
+
+      expect(service.canEditCollectionAccess()).toBe(true);
+    });
+  });
+
+  describe("bulkEditCollectionAccess()", () => {
+    it("shows error toast when a collection cannot be edited", async () => {
+      const org = makeOrg();
+      service.setConfig(makeConfig({ isOrgVault: true, organization: org }));
+      service.selection.select({ collection: makeCollection({}, true, false) });
+
+      await service.bulkEditCollectionAccess();
+
+      expect(mockToastService.showToast).toHaveBeenCalledWith(
+        expect.objectContaining({ variant: "error" }),
+      );
+      expect(mockBulkEditCollectionAccessDialogOpen).not.toHaveBeenCalled();
+    });
+
+    it("opens dialog with correct params when all collections can be edited", async () => {
+      const org = makeOrg();
+      service.setConfig(makeConfig({ isOrgVault: true, organization: org }));
+      const col = makeCollection({}, true, true);
+      service.selection.select({ collection: col });
+      mockBulkEditCollectionAccessDialogOpen.mockResolvedValue(
+        BulkEditCollectionAccessResult.Canceled,
+      );
+
+      await service.bulkEditCollectionAccess();
+
+      expect(mockBulkEditCollectionAccessDialogOpen).toHaveBeenCalledWith(
+        expect.objectContaining({ organizationId: org.id, collections: [col] }),
+      );
+    });
+
+    it("clears selection and emits completed$ when result is Saved", async () => {
+      const completedSpy = jest.fn();
+      service.completed$.subscribe(completedSpy);
+      service.setConfig(makeConfig({ isOrgVault: true, organization: makeOrg() }));
+      service.selection.select({ collection: makeCollection({}, true, true) });
+      mockBulkEditCollectionAccessDialogOpen.mockResolvedValue(
+        BulkEditCollectionAccessResult.Saved,
+      );
+
+      await service.bulkEditCollectionAccess();
+
+      expect(service.selectedCount()).toBe(0);
+      expect(completedSpy).toHaveBeenCalled();
+    });
+
+    it("does not clear selection when result is Canceled", async () => {
+      service.setConfig(makeConfig({ isOrgVault: true, organization: makeOrg() }));
+      service.selection.select({ collection: makeCollection({}, true, true) });
+      mockBulkEditCollectionAccessDialogOpen.mockResolvedValue(
+        BulkEditCollectionAccessResult.Canceled,
+      );
+
+      await service.bulkEditCollectionAccess();
 
       expect(service.selectedCount()).toBe(1);
     });

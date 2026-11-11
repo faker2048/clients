@@ -4,10 +4,11 @@ import { Component, DestroyRef, OnInit, computed, inject, signal } from "@angula
 import { takeUntilDestroyed, toSignal } from "@angular/core/rxjs-interop";
 import { FormBuilder, FormsModule, ReactiveFormsModule } from "@angular/forms";
 import { RouterModule } from "@angular/router";
-import { BehaviorSubject, firstValueFrom } from "rxjs";
-import { concatMap, map, switchMap, timeout } from "rxjs/operators";
+import { BehaviorSubject, EMPTY, combineLatest, firstValueFrom, from, fromEvent } from "rxjs";
+import { catchError, concatMap, map, switchMap, timeout } from "rxjs/operators";
 
 import { PremiumBadgeComponent } from "@bitwarden/angular/billing/components/premium-badge";
+import { AutotypeShortcutComponent } from "@bitwarden/angular/desktop-native/components/autotype-shortcut.component";
 import { PolicyService } from "@bitwarden/common/admin-console/abstractions/policy/policy.service.abstraction";
 import { PolicyType } from "@bitwarden/common/admin-console/enums";
 import { getFirstPolicy } from "@bitwarden/common/admin-console/services/policy/default-policy.service";
@@ -19,8 +20,9 @@ import { AutofillSettingsServiceAbstraction } from "@bitwarden/common/autofill/s
 import { DomainSettingsService } from "@bitwarden/common/autofill/services/domain-settings.service";
 import { ClearClipboardDelaySetting } from "@bitwarden/common/autofill/types";
 import { BillingAccountProfileStateService } from "@bitwarden/common/billing/abstractions";
+import { AutotypeFeatureFlagState } from "@bitwarden/common/desktop-native/enums/autotype-feature-flag-state.enum";
+import { autotypeFeatureFlagState$ } from "@bitwarden/common/desktop-native/services/autotype-feature-flags";
 import { DeviceType } from "@bitwarden/common/enums";
-import { FeatureFlag } from "@bitwarden/common/enums/feature-flag.enum";
 import { PinServiceAbstraction } from "@bitwarden/common/key-management/pin/pin.service.abstraction";
 import { VaultTimeoutSettingsService } from "@bitwarden/common/key-management/vault-timeout";
 import { ConfigService } from "@bitwarden/common/platform/abstractions/config/config.service";
@@ -34,16 +36,20 @@ import { Theme, ThemeTypes } from "@bitwarden/common/platform/enums/theme-type.e
 import { Utils } from "@bitwarden/common/platform/misc/utils";
 import { ThemeStateService } from "@bitwarden/common/platform/theming/theme-state.service";
 import { UserId } from "@bitwarden/common/types/guid";
+import { CipherService } from "@bitwarden/common/vault/abstractions/cipher.service";
 import { PremiumUpgradePromptService } from "@bitwarden/common/vault/abstractions/premium-upgrade-prompt.service";
+import { CipherType } from "@bitwarden/common/vault/enums";
+import { CipherView } from "@bitwarden/common/vault/models/view/cipher.view";
 import {
+  BadgeComponent,
   ButtonModule,
+  CalloutModule,
   CheckboxModule,
   DialogModule,
   DialogService,
   FormFieldModule,
   IconButtonModule,
   IconModule,
-  ItemModule,
   LinkModule,
   Option,
   SectionComponent,
@@ -55,12 +61,21 @@ import {
 import { KeyService, BiometricStateService, BiometricsStatus } from "@bitwarden/key-management";
 import { SessionTimeoutSettingsComponent } from "@bitwarden/key-management-ui";
 import { I18nPipe } from "@bitwarden/ui-common";
-import { PermitCipherDetailsPopoverComponent } from "@bitwarden/vault";
+import { AutoUnlockService } from "@bitwarden/unlock";
+import {
+  PermitCipherDetailsPopoverComponent,
+  VaultCopyButtonsService,
+  ShowQuickCopyActionsDetailsPopoverComponent,
+} from "@bitwarden/vault";
 
 import { SetPinComponent } from "../../auth/components/set-pin.component";
-import { AutotypeShortcutComponent } from "../../autofill/components/autotype-shortcut.component";
 import { SshAgentPromptType } from "../../autofill/models/ssh-agent-setting";
 import { DesktopAutofillSettingsService } from "../../autofill/services/desktop-autofill-settings.service";
+import {
+  DesktopAutofillService,
+  PasskeyProviderState,
+} from "../../autofill/services/desktop-autofill.service";
+import { DesktopAutotypeMvpService } from "../../autofill/services/desktop-autotype-mvp.service";
 import { DesktopAutotypeService } from "../../autofill/services/desktop-autotype.service";
 import { DesktopPremiumUpgradePromptService } from "../../billing/services/desktop-premium-upgrade-prompt.service";
 import { DesktopBiometricsService } from "../../key-management/biometrics/desktop.biometrics.service";
@@ -78,7 +93,9 @@ import { NativeMessagingManifestService } from "../services/native-messaging-man
     },
   ],
   imports: [
+    BadgeComponent,
     ButtonModule,
+    CalloutModule,
     CheckboxModule,
     DialogModule,
     FormFieldModule,
@@ -86,7 +103,6 @@ import { NativeMessagingManifestService } from "../services/native-messaging-man
     ReactiveFormsModule,
     IconButtonModule,
     IconModule,
-    ItemModule,
     I18nPipe,
     LinkModule,
     RouterModule,
@@ -98,6 +114,7 @@ import { NativeMessagingManifestService } from "../services/native-messaging-man
     SessionTimeoutSettingsComponent,
     PermitCipherDetailsPopoverComponent,
     PremiumBadgeComponent,
+    ShowQuickCopyActionsDetailsPopoverComponent,
   ],
 })
 export class SettingsDialogComponent implements OnInit {
@@ -111,15 +128,18 @@ export class SettingsDialogComponent implements OnInit {
   private readonly autofillSettingsService = inject(AutofillSettingsServiceAbstraction);
   private readonly messagingService = inject(MessagingService);
   private readonly keyService = inject(KeyService);
+  private readonly autoUnlockService = inject(AutoUnlockService);
   private readonly themeStateService = inject(ThemeStateService);
   private readonly domainSettingsService = inject(DomainSettingsService);
   private readonly dialogService = inject(DialogService);
   private readonly userVerificationService = inject(UserVerificationServiceAbstraction);
   private readonly desktopSettingsService = inject(DesktopSettingsService);
+  private readonly desktopAutotypeMvpService = inject(DesktopAutotypeMvpService);
   private readonly desktopAutotypeService = inject(DesktopAutotypeService);
   private readonly biometricStateService = inject(BiometricStateService);
   private readonly biometricsService = inject(DesktopBiometricsService);
   private readonly desktopAutofillSettingsService = inject(DesktopAutofillSettingsService);
+  private readonly desktopAutofillService = inject(DesktopAutofillService);
   private readonly pinService = inject(PinServiceAbstraction);
   private readonly logService = inject(LogService);
   private readonly nativeMessagingManifestService = inject(NativeMessagingManifestService);
@@ -127,6 +147,8 @@ export class SettingsDialogComponent implements OnInit {
   private readonly validationService = inject(ValidationService);
   private readonly billingAccountProfileStateService = inject(BillingAccountProfileStateService);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly vaultCopyButtonsService = inject(VaultCopyButtonsService);
+  private readonly cipherService = inject(CipherService);
 
   protected readonly localeOptions: Option<string>[];
   protected readonly themeOptions: Option<string>[];
@@ -143,6 +165,11 @@ export class SettingsDialogComponent implements OnInit {
 
   protected readonly supportsBiometric = signal(false);
   protected readonly showEnableAutotype = signal(false);
+  protected readonly showEnableAutotypeGa = signal(false);
+  protected readonly passkeyProviderState = signal<PasskeyProviderState | undefined>(undefined);
+  protected readonly showPasskeyProviderSetting = computed(
+    () => this.passkeyProviderState()?.registered === true,
+  );
   private readonly activeAccount = toSignal(this.accountService.activeAccount$, {
     requireSync: true,
   });
@@ -164,6 +191,33 @@ export class SettingsDialogComponent implements OnInit {
   );
   protected readonly refreshTimeoutSettings$ = new BehaviorSubject<void>(undefined);
 
+  /** SSH-key ciphers with current per-cipher local settings, for the SSH-agent management list. */
+  protected readonly sshKeyCiphers = toSignal(
+    combineLatest([
+      this.accountService.activeAccount$.pipe(
+        getUserId,
+        switchMap((userId) => this.cipherService.cipherViews$(userId)),
+      ),
+      this.desktopSettingsService.sshAgentCipherSettings$,
+    ]).pipe(
+      map(([views, settings]) => {
+        if (views == null) {
+          return [];
+        }
+        return views
+          .filter((c: CipherView) => c.type === CipherType.SshKey && !c.isDeleted && !c.isArchived)
+          .map((c: CipherView) => ({
+            id: c.id,
+            name: c.name ?? "",
+            exposeToAgent: settings[c.id]?.exposeToAgent !== false,
+            notifyOnUse: settings[c.id]?.notifyOnUse === true,
+          }))
+          .sort((a, b) => a.name.localeCompare(b.name));
+      }),
+    ),
+    { initialValue: [] },
+  );
+
   protected readonly form = this.formBuilder.group({
     // Security
     pin: [null as boolean | null],
@@ -174,13 +228,13 @@ export class SettingsDialogComponent implements OnInit {
     clearClipboard: [null],
     minimizeOnCopyToClipboard: false,
     enableFavicons: false,
+    showQuickCopyActions: false,
     // App Settings
     runInBackground: false,
     openAtLogin: false,
-    enableBrowserIntegration: false,
     enableHardwareAcceleration: true,
     enableSshAgent: false,
-    sshAgentPromptBehavior: SshAgentPromptType.Always,
+    sshAgentPromptBehavior: this.formBuilder.control<SshAgentPromptType>(SshAgentPromptType.Always),
     allowScreenshots: false,
     enableDuckDuckGoBrowserIntegration: false,
     enableAutotype: this.formBuilder.control<boolean>({
@@ -188,6 +242,11 @@ export class SettingsDialogComponent implements OnInit {
       disabled: true,
     }),
     autotypeShortcut: [null as string | null],
+    enableAutotypeGa: this.formBuilder.control<boolean>({
+      value: false,
+      disabled: true,
+    }),
+    autotypeGaShortcut: [null as string | null],
     theme: [null as Theme | null],
     locale: [null as string | null],
   });
@@ -244,17 +303,23 @@ export class SettingsDialogComponent implements OnInit {
         label: this.i18nService.t("sshAgentPromptBehaviorRememberUntilLock"),
         value: SshAgentPromptType.RememberUntilLock,
       },
+      {
+        label: this.i18nService.t("sshAgentPromptBehaviorAdvanced"),
+        value: SshAgentPromptType.Advanced,
+      },
     ];
   }
 
   async ngOnInit() {
+    void this.loadPasskeyProviderSetting();
+
     // Autotype is for Windows initially
     if (this.isWindows) {
-      this.configService
-        .getFeatureFlag$(FeatureFlag.WindowsDesktopAutotype)
+      autotypeFeatureFlagState$(this.configService)
         .pipe(takeUntilDestroyed(this.destroyRef))
-        .subscribe((enabled) => {
-          this.showEnableAutotype.set(enabled);
+        .subscribe((state) => {
+          this.showEnableAutotype.set(state === AutotypeFeatureFlagState.Mvp);
+          this.showEnableAutotypeGa.set(state === AutotypeFeatureFlagState.Ga);
         });
     }
 
@@ -268,15 +333,17 @@ export class SettingsDialogComponent implements OnInit {
       requireMasterPasswordOnAppRestart: !(await this.biometricsService.hasPersistentKey(
         this.currentUserId(),
       )),
-      autoPromptBiometrics: await firstValueFrom(this.biometricStateService.promptAutomatically$),
+      autoPromptBiometrics: await firstValueFrom(
+        this.biometricStateService.promptAutomatically$(this.currentUserId()),
+      ),
       clearClipboard: await firstValueFrom(this.autofillSettingsService.clearClipboardDelay$),
       minimizeOnCopyToClipboard: await firstValueFrom(this.desktopSettingsService.minimizeOnCopy$),
       enableFavicons: await firstValueFrom(this.domainSettingsService.showFavicons$),
+      showQuickCopyActions: await firstValueFrom(
+        this.vaultCopyButtonsService.showQuickCopyActions$,
+      ),
       runInBackground: await firstValueFrom(this.desktopSettingsService.runInBackground$),
       openAtLogin: await firstValueFrom(this.desktopSettingsService.openAtLogin$),
-      enableBrowserIntegration: await firstValueFrom(
-        this.desktopSettingsService.browserIntegrationEnabled$,
-      ),
       enableDuckDuckGoBrowserIntegration: await firstValueFrom(
         this.desktopAutofillSettingsService.enableDuckDuckGoBrowserIntegration$,
       ),
@@ -288,8 +355,16 @@ export class SettingsDialogComponent implements OnInit {
         this.desktopSettingsService.sshAgentPromptBehavior$,
       ),
       allowScreenshots: !(await firstValueFrom(this.desktopSettingsService.preventScreenshots$)),
-      enableAutotype: await firstValueFrom(this.desktopAutotypeService.autotypeEnabledUserSetting$),
+      enableAutotype: await firstValueFrom(
+        this.desktopAutotypeMvpService.autotypeEnabledUserSetting$,
+      ),
       autotypeShortcut: this.getFormattedAutotypeShortcutText(
+        (await firstValueFrom(this.desktopAutotypeMvpService.autotypeKeyboardShortcut$)) ?? [],
+      ),
+      enableAutotypeGa: await firstValueFrom(
+        this.desktopAutotypeService.autotypeEnabledUserSetting$,
+      ),
+      autotypeGaShortcut: this.getFormattedAutotypeShortcutText(
         (await firstValueFrom(this.desktopAutotypeService.autotypeKeyboardShortcut$)) ?? [],
       ),
       theme: await firstValueFrom(this.themeStateService.selectedTheme$),
@@ -303,7 +378,8 @@ export class SettingsDialogComponent implements OnInit {
         .pipe(takeUntilDestroyed(this.destroyRef))
         .subscribe((hasPremium) => {
           if (hasPremium) {
-            this.form.controls.enableAutotype.enable();
+            this.form.controls.enableAutotype.enable(); // MVP, delete with PM-41067
+            this.form.controls.enableAutotypeGa.enable();
           }
         });
     }
@@ -400,9 +476,9 @@ export class SettingsDialogComponent implements OnInit {
     } else {
       const userId = await firstValueFrom(this.accountService.activeAccount$.pipe(getUserId));
 
-      // On Windows if a user turned off PIN without having a MP and has biometrics + require MP/PIN on restart enabled.
+      // On Windows and Linux if a user turned off PIN without having a MP and has biometrics + require MP/PIN on restart enabled.
       if (
-        this.isWindows &&
+        (this.isWindows || this.isLinux) &&
         this.supportsBiometric() &&
         this.form.value.requireMasterPasswordOnAppRestart &&
         this.form.value.biometric &&
@@ -421,6 +497,9 @@ export class SettingsDialogComponent implements OnInit {
     } catch (error) {
       this.logService.error("Error updating unlock with biometrics: ", error);
       this.form.controls.biometric.setValue(false, { emitEvent: false });
+      // Keep the stored state in line with the form, e.g. when storing the key failed.
+      const userId = await firstValueFrom(this.accountService.activeAccount$.pipe(getUserId));
+      await this.biometricStateService.setBiometricUnlockEnabled(false, userId);
       this.validationService.showError(error);
     } finally {
       this.messagingService.send("redrawMenu");
@@ -436,8 +515,9 @@ export class SettingsDialogComponent implements OnInit {
     const activeUserId = await firstValueFrom(this.accountService.activeAccount$.pipe(getUserId));
     if (!enabled || !this.supportsBiometric()) {
       this.form.controls.biometric.setValue(false, { emitEvent: false });
-      await this.biometricStateService.setBiometricUnlockEnabled(false);
-      await this.keyService.refreshAdditionalKeys(activeUserId);
+      await this.biometricStateService.setBiometricUnlockEnabled(false, activeUserId);
+      await this.biometricsService.deleteBiometricUnlockKeyForUser(activeUserId);
+      await this.autoUnlockService.refreshAutoUnlockKey(activeUserId);
       return;
     }
 
@@ -457,25 +537,41 @@ export class SettingsDialogComponent implements OnInit {
       return;
     }
 
-    await this.biometricStateService.setBiometricUnlockEnabled(true);
-    if (this.isWindows) {
-      // Recommended settings for Windows Hello
+    await this.biometricStateService.setBiometricUnlockEnabled(true, activeUserId);
+    // Stored first, so biometric unlock works even if the persistent enrollment below fails.
+    const userKey = await firstValueFrom(this.keyService.userKey$(activeUserId));
+    await this.biometricsService.setBiometricProtectedUnlockKeyForUser(activeUserId, userKey);
+
+    if (this.isWindows || this.isLinux) {
+      // Recommended settings for Windows Hello and Linux system authentication
       this.form.controls.autoPromptBiometrics.setValue(false);
-      await this.biometricStateService.setPromptAutomatically(false);
+      await this.biometricStateService.setPromptAutomatically(false, activeUserId);
 
       // If the user doesn't have a MP or PIN then they have to use biometrics on app restart.
       if (!this.userHasMasterPassword() && !this.userHasPinSet()) {
         // Allow biometric unlock on app restart so the user doesn't get into a bad state.
+        // A failed enrollment (e.g. cancelled Windows Hello prompt) is not fatal: the key stored
+        // above still allows biometric unlock.
         await this.enrollPersistentBiometricIfNeeded(activeUserId);
       } else {
-        this.form.controls.requireMasterPasswordOnAppRestart.setValue(true);
+        // Awaited instead of emitted: the change handler deletes the biometric key before storing
+        // it again, and running it in parallel races the validation below.
+        this.form.controls.requireMasterPasswordOnAppRestart.setValue(true, { emitEvent: false });
+        await this.updateRequireMasterPasswordOnAppRestart(true, activeUserId);
       }
-    } else if (this.isLinux) {
-      // Similar to Windows
-      this.form.controls.autoPromptBiometrics.setValue(false);
-      await this.biometricStateService.setPromptAutomatically(false);
+    } else if (this.isMac) {
+      // Touch ID always persists the key. Enrolling records the enrolled key id, so the
+      // re-enrollment migration detects a key rotation. A failure is not fatal: the key stored
+      // above still allows biometric unlock.
+      try {
+        await this.biometricsService.enrollPersistent(activeUserId, userKey);
+      } catch (error) {
+        this.logService.error("Error enrolling persistent biometric unlock: ", error);
+        this.validationService.showError(error);
+      }
     }
-    await this.keyService.refreshAdditionalKeys(activeUserId);
+
+    await this.autoUnlockService.refreshAutoUnlockKey(activeUserId);
 
     // Validate the key is stored in case biometrics fail.
     const biometricSet =
@@ -483,7 +579,7 @@ export class SettingsDialogComponent implements OnInit {
       BiometricsStatus.Available;
     this.form.controls.biometric.setValue(biometricSet, { emitEvent: false });
     if (!biometricSet) {
-      await this.biometricStateService.setBiometricUnlockEnabled(false);
+      await this.biometricStateService.setBiometricUnlockEnabled(false, activeUserId);
     }
   }
 
@@ -508,27 +604,94 @@ export class SettingsDialogComponent implements OnInit {
     }
   }
 
+  /**
+   * Persists the user key so biometrics alone can unlock the vault after an app restart.
+   */
   private async enrollPersistentBiometricIfNeeded(userId: UserId): Promise<void> {
-    if (!(await this.biometricsService.hasPersistentKey(userId))) {
-      const userKey = await firstValueFrom(this.keyService.userKey$(userId));
-      await this.biometricsService.enrollPersistent(userId, userKey);
-      this.form.controls.requireMasterPasswordOnAppRestart.setValue(false, {
-        emitEvent: false,
-      });
+    try {
+      if (!(await this.biometricsService.hasPersistentKey(userId))) {
+        const userKey = await firstValueFrom(this.keyService.userKey$(userId));
+        await this.biometricsService.enrollPersistent(userId, userKey);
+        this.form.controls.requireMasterPasswordOnAppRestart.setValue(false, {
+          emitEvent: false,
+        });
+      }
+    } catch (error) {
+      this.logService.error("Error enrolling persistent biometric unlock: ", error);
+      this.validationService.showError(error);
     }
   }
 
   protected async updateAutoPromptBiometrics() {
+    const activeUserId = await firstValueFrom(this.accountService.activeAccount$.pipe(getUserId));
     if (this.form.value.autoPromptBiometrics) {
-      await this.biometricStateService.setPromptAutomatically(true);
+      await this.biometricStateService.setPromptAutomatically(true, activeUserId);
     } else {
-      await this.biometricStateService.setPromptAutomatically(false);
+      await this.biometricStateService.setPromptAutomatically(false, activeUserId);
+    }
+  }
+
+  /**
+   * Shows the passkey provider setting if the app is registered with the OS, and keeps its status
+   * up to date when the window regains focus, e.g. after the user changes it in system settings.
+   */
+  private async loadPasskeyProviderSetting() {
+    try {
+      this.passkeyProviderState.set(
+        await this.desktopAutofillService.refreshPasskeyProviderState(),
+      );
+    } catch (e) {
+      this.logService.error("Failed to load passkey provider setting", e);
+      return;
+    }
+    if (!this.showPasskeyProviderSetting()) {
+      return;
+    }
+
+    fromEvent(window, "focus")
+      .pipe(
+        // Catch inside `switchMap` so one failed refresh doesn't stop later ones.
+        switchMap(() =>
+          from(this.desktopAutofillService.getPasskeyProviderState()).pipe(
+            catchError((e: unknown) => {
+              this.logService.error("Failed to refresh passkey provider state", e);
+              return EMPTY;
+            }),
+          ),
+        ),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe((state) => this.passkeyProviderState.set(state));
+  }
+
+  /**
+   * Asks the user to turn on Bitwarden if it is off and the OS can prompt, otherwise opens the
+   * system settings.
+   */
+  protected async managePasskeyProvider() {
+    try {
+      if (!this.passkeyProviderState()?.enabled) {
+        const enabled = await this.desktopAutofillService.requestEnableCredentialProvider();
+        if (enabled !== undefined) {
+          this.passkeyProviderState.set({ registered: true, enabled });
+          return;
+        }
+      }
+      await this.desktopAutofillService.openCredentialProviderSettings();
+    } catch (e) {
+      this.logService.error("Failed to manage passkey provider", e);
     }
   }
 
   protected async saveFavicons() {
     await this.domainSettingsService.setShowFavicons(this.form.value.enableFavicons);
     this.messagingService.send("refreshCiphers");
+  }
+
+  async saveQuickCopyActions() {
+    await this.vaultCopyButtonsService.setShowQuickCopyActions(
+      this.form.value.showQuickCopyActions,
+    );
   }
 
   protected async saveRunInBackground() {
@@ -557,8 +720,7 @@ export class SettingsDialogComponent implements OnInit {
   private showAutostartSetting(): boolean {
     // Windows store does not support autostart
     // Dev mode should not show auto-start, because it would result in an empty electron window starting on login
-    // Snap store has auto-start enabled through electron-builder ALWAYS
-    return !ipc.platform.isWindowsStore && !ipc.platform.isDev && !ipc.platform.isSnapStore;
+    return !ipc.platform.isWindowsStore && !ipc.platform.isDev;
   }
 
   protected async saveOpenAtLogin() {
@@ -567,44 +729,6 @@ export class SettingsDialogComponent implements OnInit {
     this.messagingService.send(
       this.form.value.openAtLogin ? "addOpenAtLogin" : "removeOpenAtLogin",
     );
-  }
-
-  protected async saveBrowserIntegration() {
-    const skipSupportedPlatformCheck =
-      ipc.platform.allowBrowserintegrationOverride || ipc.platform.isDev;
-
-    if (!skipSupportedPlatformCheck) {
-      if (ipc.platform.isWindowsStore) {
-        await this.dialogService.openSimpleDialog({
-          title: { key: "browserIntegrationUnsupportedTitle" },
-          content: { key: "browserIntegrationWindowsStoreDesc" },
-          acceptButtonText: { key: "ok" },
-          cancelButtonText: null,
-          type: "warning",
-        });
-
-        this.form.controls.enableBrowserIntegration.setValue(false);
-        return;
-      }
-    }
-
-    await this.desktopSettingsService.setBrowserIntegrationEnabled(
-      this.form.value.enableBrowserIntegration,
-    );
-
-    const errorResult = await this.nativeMessagingManifestService.generate(
-      this.form.value.enableBrowserIntegration,
-    );
-    if (errorResult !== null) {
-      this.logService.error("Error in browser integration: " + errorResult);
-      await this.dialogService.openSimpleDialog({
-        title: { key: "browserIntegrationErrorTitle" },
-        content: { key: "browserIntegrationErrorDesc" },
-        acceptButtonText: { key: "ok" },
-        cancelButtonText: null,
-        type: "danger",
-      });
-    }
   }
 
   protected async saveDdgBrowserIntegration() {
@@ -616,10 +740,6 @@ export class SettingsDialogComponent implements OnInit {
     await this.stateService.setEnableDuckDuckGoBrowserIntegration(
       this.form.value.enableDuckDuckGoBrowserIntegration,
     );
-
-    if (!this.form.value.enableBrowserIntegration) {
-      await this.stateService.setDuckDuckGoSharedKey(null);
-    }
 
     const errorResult = await this.nativeMessagingManifestService.generateDuckDuckGo(
       this.form.value.enableDuckDuckGoBrowserIntegration,
@@ -637,6 +757,18 @@ export class SettingsDialogComponent implements OnInit {
 
   protected async saveSshAgent() {
     await this.desktopSettingsService.setSshAgentEnabled(this.form.value.enableSshAgent);
+  }
+
+  protected async toggleSshKeyExpose(cipherId: string, exposeToAgent: boolean) {
+    await this.desktopSettingsService.setSshAgentCipherSetting(cipherId, {
+      exposeToAgent: exposeToAgent ? undefined : false,
+    });
+  }
+
+  protected async toggleSshKeyNotify(cipherId: string, notifyOnUse: boolean) {
+    await this.desktopSettingsService.setSshAgentCipherSetting(cipherId, {
+      notifyOnUse: notifyOnUse ? true : undefined,
+    });
   }
 
   private async saveSshAgentPromptBehavior(newValue: SshAgentPromptType) {
@@ -671,9 +803,9 @@ export class SettingsDialogComponent implements OnInit {
   }
 
   protected async saveEnableAutotype() {
-    await this.desktopAutotypeService.setAutotypeEnabledState(this.form.value.enableAutotype);
+    await this.desktopAutotypeMvpService.setAutotypeEnabledState(this.form.value.enableAutotype);
     const currentShortcut = await firstValueFrom(
-      this.desktopAutotypeService.autotypeKeyboardShortcut$,
+      this.desktopAutotypeMvpService.autotypeKeyboardShortcut$,
     );
     if (currentShortcut) {
       this.form.controls.autotypeShortcut.setValue(
@@ -683,6 +815,43 @@ export class SettingsDialogComponent implements OnInit {
   }
 
   protected async saveAutotypeShortcut() {
+    // disable the shortcut so that the user can't re-enter the existing
+    // shortcut and trigger the feature during the settings menu.
+    // it is not necessary to check if it's already enabled, because
+    // the edit shortcut is only available if the feature is enabled
+    // in the settings.
+    await this.desktopAutotypeMvpService.setAutotypeEnabledState(false);
+
+    const dialogRef = AutotypeShortcutComponent.open(this.dialogService);
+
+    const newShortcutArray = await firstValueFrom(dialogRef.closed);
+
+    // re-enable
+    await this.desktopAutotypeMvpService.setAutotypeEnabledState(true);
+
+    if (!newShortcutArray) {
+      return;
+    }
+
+    this.form.controls.autotypeShortcut.setValue(
+      this.getFormattedAutotypeShortcutText(newShortcutArray),
+    );
+    await this.desktopAutotypeMvpService.setAutotypeKeyboardShortcutState(newShortcutArray);
+  }
+
+  protected async saveEnableAutotypeGa() {
+    await this.desktopAutotypeService.setAutotypeEnabledState(this.form.value.enableAutotypeGa);
+    const currentShortcut = await firstValueFrom(
+      this.desktopAutotypeService.autotypeKeyboardShortcut$,
+    );
+    if (currentShortcut) {
+      this.form.controls.autotypeGaShortcut.setValue(
+        this.getFormattedAutotypeShortcutText(currentShortcut),
+      );
+    }
+  }
+
+  protected async saveAutotypeGaShortcut() {
     // disable the shortcut so that the user can't re-enter the existing
     // shortcut and trigger the feature during the settings menu.
     // it is not necessary to check if it's already enabled, because
@@ -701,7 +870,7 @@ export class SettingsDialogComponent implements OnInit {
       return;
     }
 
-    this.form.controls.autotypeShortcut.setValue(
+    this.form.controls.autotypeGaShortcut.setValue(
       this.getFormattedAutotypeShortcutText(newShortcutArray),
     );
     await this.desktopAutotypeService.setAutotypeKeyboardShortcutState(newShortcutArray);

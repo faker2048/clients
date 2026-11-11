@@ -28,8 +28,7 @@ impl WindowsListener {
     ///
     /// Returns an error if the named pipe cannot be created.
     pub(crate) fn new() -> Result<Self> {
-        let server = ServerOptions::new()
-            .create(PIPE_NAME)
+        let server = create_pipe_instance()
             .map_err(|e| anyhow!("Unable to create named pipe {PIPE_NAME}: {e}"))?;
 
         info!(pipe_name = PIPE_NAME, "Named pipe listener ready");
@@ -43,12 +42,19 @@ impl Listener for WindowsListener {
     type Stream = NamedPipeServer;
 
     async fn accept(&mut self) -> Result<Connection<Self::Stream>> {
-        self.inner.connect().await?;
+        if let Err(error) = self.inner.connect().await {
+            // A failed connect leaves this instance unusable (e.g. ERROR_NO_DATA when the
+            // client closed before the connect completed): connecting it again fails
+            // immediately, so swap in a fresh instance instead of retrying on it.
+            self.inner = create_pipe_instance().map_err(|e| {
+                anyhow!("Failed to replace pipe instance after connect error ({error}): {e}")
+            })?;
+            return Err(anyhow!("Named pipe connect failed: {error}"));
+        }
 
         // Create the next server instance before handing off the current one, so the
         // pipe name remains available for subsequent clients without a gap.
-        let next = ServerOptions::new()
-            .create(PIPE_NAME)
+        let next = create_pipe_instance()
             .map_err(|e| anyhow!("Failed to create next pipe instance after accept: {e}"))?;
 
         let stream = mem::replace(&mut self.inner, next);
@@ -56,6 +62,10 @@ impl Listener for WindowsListener {
 
         Ok(Connection { stream, peer_info })
     }
+}
+
+fn create_pipe_instance() -> std::io::Result<NamedPipeServer> {
+    ServerOptions::new().create(PIPE_NAME)
 }
 
 // Gathers peer process info from a connected named pipe server handle.

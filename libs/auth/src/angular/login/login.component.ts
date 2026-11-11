@@ -10,11 +10,11 @@ import {
 } from "@angular/core";
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import { FormBuilder, FormControl, ReactiveFormsModule, Validators } from "@angular/forms";
-import { ActivatedRoute, Router, RouterModule } from "@angular/router";
+import { ActivatedRoute, Params, Router, RouterModule } from "@angular/router";
 import { firstValueFrom, Subject, take, takeUntil, skip, combineLatest, startWith } from "rxjs";
 
 import { JslibModule } from "@bitwarden/angular/jslib.module";
-import { VaultIcon, WaveIcon } from "@bitwarden/assets/svg";
+import { LockIcon, VaultIcon, WaveIcon } from "@bitwarden/assets/svg";
 import {
   LoginEmailServiceAbstraction,
   LoginStrategyServiceAbstraction,
@@ -26,12 +26,12 @@ import { MasterPasswordPolicyOptions } from "@bitwarden/common/admin-console/mod
 import { DevicesApiServiceAbstraction } from "@bitwarden/common/auth/abstractions/devices-api.service.abstraction";
 import { SsoLoginServiceAbstraction } from "@bitwarden/common/auth/abstractions/sso-login.service.abstraction";
 import { AuthResult } from "@bitwarden/common/auth/models/domain/auth-result";
+import { OrganizationInviteService } from "@bitwarden/common/auth/organization-invite";
 import { PasswordPreloginService } from "@bitwarden/common/auth/password-prelogin";
 import { ClientType, HttpStatusCode } from "@bitwarden/common/enums";
 import { ErrorResponse } from "@bitwarden/common/models/response/error.response";
 import { AppIdService } from "@bitwarden/common/platform/abstractions/app-id.service";
 import { BroadcasterService } from "@bitwarden/common/platform/abstractions/broadcaster.service";
-import { ConfigService } from "@bitwarden/common/platform/abstractions/config/config.service";
 import { EnvironmentService } from "@bitwarden/common/platform/abstractions/environment.service";
 import { I18nService } from "@bitwarden/common/platform/abstractions/i18n.service";
 import { LogService } from "@bitwarden/common/platform/abstractions/log.service";
@@ -43,6 +43,7 @@ import { PasswordStrengthServiceAbstraction } from "@bitwarden/common/tools/pass
 // This import has been flagged as unallowed for this class. It may be involved in a circular dependency loop.
 // eslint-disable-next-line no-restricted-imports
 import {
+  AnonLayoutWrapperData,
   AnonLayoutWrapperDataService,
   AsyncActionsModule,
   ButtonModule,
@@ -93,7 +94,7 @@ export class LoginComponent implements OnInit, OnDestroy {
   @ViewChild("masterPasswordInputRef") masterPasswordInputRef: ElementRef | undefined;
 
   private destroy$ = new Subject<void>();
-  readonly Icons = { WaveIcon, VaultIcon };
+  readonly Icons = { WaveIcon, VaultIcon, LockIcon };
 
   clientType: ClientType;
   ClientType = ClientType;
@@ -144,10 +145,10 @@ export class LoginComponent implements OnInit, OnDestroy {
     private logService: LogService,
     private validationService: ValidationService,
     private loginSuccessHandlerService: LoginSuccessHandlerService,
-    private configService: ConfigService,
     private ssoLoginService: SsoLoginServiceAbstraction,
     private environmentService: EnvironmentService,
     private passwordPreloginService: PasswordPreloginService,
+    private organizationInviteService: OrganizationInviteService,
   ) {
     this.clientType = this.platformUtilsService.getClientType();
   }
@@ -156,11 +157,24 @@ export class LoginComponent implements OnInit, OnDestroy {
     // Add popstate listener to listen for browser back button clicks
     window.addEventListener("popstate", this.handlePopState);
 
-    await this.defaultOnInit();
+    const redirected = await this.defaultOnInit();
+    if (redirected) {
+      // defaultOnInit navigated to another route. Skip everything below
+      return;
+    }
 
     if (this.clientType === ClientType.Desktop) {
       await this.desktopOnInit();
     }
+
+    // Push the open-org-invite title last so it wins over any chrome the steps above
+    // (route data, defaultOnInit's auto-submit override) may have set. Harmless on
+    // the auto-submit path — autoProgressToMpEntry already writes the same
+    // "Join <org>" title for the same org, and setAnonLayoutWrapperData merges only
+    // defined fields so the subtitle/icon set by the SSO override are preserved.
+    // TODO: consider replacing with a `pageTitle` route resolver so the correct title
+    // renders on first paint instead of flashing the default first.
+    await this.applyOpenOrgInviteTitleOverride();
   }
 
   ngOnDestroy(): void {
@@ -176,22 +190,15 @@ export class LoginComponent implements OnInit, OnDestroy {
     this.destroy$.complete();
   }
 
-  private async defaultOnInit(): Promise<void> {
-    let paramEmailIsSet = false;
-
+  /**
+   * Runs the shared default init. Returns `true` when the client-specific
+   * `handleQueryParamErrors` navigated away from /login, so callers can skip
+   * any further init that would be torn down immediately.
+   */
+  private async defaultOnInit(): Promise<boolean> {
     const params = await firstValueFrom(this.activatedRoute.queryParams);
+    const paramEmailIsSet = this.applyEmailFromQueryParams(params);
 
-    if (params) {
-      const qParamsEmail = params.email;
-
-      // If there is an email in the query params, set that email as the form field value
-      if (qParamsEmail != null && qParamsEmail.indexOf("@") > -1) {
-        this.formGroup.controls.email.setValue(qParamsEmail);
-        paramEmailIsSet = true;
-      }
-    }
-
-    // If there are no params or no email in the query params, loadEmailSettings from state
     if (!paramEmailIsSet) {
       await this.loadRememberedEmail();
     }
@@ -201,10 +208,22 @@ export class LoginComponent implements OnInit, OnDestroy {
       await this.getKnownDevice(this.emailFormControl.value);
     }
 
-    // Backup check to handle unknown case where activatedRoute is not available
-    // This shouldn't happen under normal circumstances
-    if (!this.activatedRoute) {
-      await this.loadRememberedEmail();
+    // Let the client decide whether to auto-progress past email entry and how to
+    // respond to error codes in /login query params (e.g. SSO invited-user server redirects).
+    const queryParamResult = params
+      ? await this.loginComponentService.handleQueryParamErrors?.(params)
+      : undefined;
+
+    // Handler already navigated to another route; stop running the rest of init
+    // so we don't set up subscriptions/state that Angular is about to tear down.
+    if (queryParamResult?.kind === "redirected") {
+      return true;
+    }
+
+    // Auto-progress when the hook signals it. Via continuePressed (not continue) so its
+    // pushState lets back-button return to email entry rather than the SSO callback URL.
+    if (queryParamResult?.kind === "auto-submit" && paramEmailIsSet) {
+      await this.continuePressed(queryParamResult.mpEntryLayoutOverride);
     }
 
     // This SSO required tracking should be initialized after email has had a chance to be pre-filled
@@ -229,6 +248,22 @@ export class LoginComponent implements OnInit, OnDestroy {
           this.prefetchPasswordPreloginData();
         }
       });
+
+    return false;
+  }
+
+  /**
+   * Pre-fills the email form control from `?email=…` if the param is present and
+   * looks like an email. Returns whether the form control was set so the caller
+   * can decide whether to fall back to the remembered email.
+   */
+  private applyEmailFromQueryParams(params: Params | null): boolean {
+    const qParamsEmail = params?.email;
+    if (qParamsEmail != null && qParamsEmail.indexOf("@") > -1) {
+      this.formGroup.controls.email.setValue(qParamsEmail);
+      return true;
+    }
+    return false;
   }
 
   private async desktopOnInit(): Promise<void> {
@@ -507,7 +542,10 @@ export class LoginComponent implements OnInit, OnDestroy {
     await this.router.navigate(["/login-with-device"]);
   }
 
-  protected async toggleLoginUiState(value: LoginUiState): Promise<void> {
+  protected async toggleLoginUiState(
+    value: LoginUiState,
+    mpEntryLayoutOverride?: Partial<AnonLayoutWrapperData>,
+  ): Promise<void> {
     this.loginUiState = value;
 
     if (this.loginUiState === LoginUiState.EMAIL_ENTRY) {
@@ -519,6 +557,10 @@ export class LoginComponent implements OnInit, OnDestroy {
         pageSubtitle: null, // remove subtitle when going back to email entry
       });
 
+      // Re-apply the open-org-invite title for back-nav from MP entry; the default push
+      // above would otherwise clobber it.
+      await this.applyOpenOrgInviteTitleOverride();
+
       // Reset master password only when going from validated to not validated so that autofill can work properly
       this.formGroup.controls.masterPassword.reset();
 
@@ -527,11 +569,13 @@ export class LoginComponent implements OnInit, OnDestroy {
     } else if (this.loginUiState === LoginUiState.MASTER_PASSWORD_ENTRY) {
       this.loginComponentService.showBackButton(true);
 
-      this.anonLayoutWrapperDataService.setAnonLayoutWrapperData({
-        pageTitle: { key: "loginPageMasterPasswordEntryScreenTitle" },
-        pageSubtitle: this.emailFormControl.value,
-        pageIcon: this.Icons.WaveIcon, // layout decides whether to render it via hidePageIcon
-      });
+      this.anonLayoutWrapperDataService.setAnonLayoutWrapperData(
+        mpEntryLayoutOverride ?? {
+          pageTitle: { key: "loginPageMasterPasswordEntryScreenTitle" },
+          pageSubtitle: this.emailFormControl.value,
+          pageIcon: this.Icons.WaveIcon, // layout decides whether to render it via hidePageIcon
+        },
+      );
 
       // Mark MP as untouched so that, when users enter email and hit enter, the MP field doesn't load with validation errors
       this.formGroup.controls.masterPassword.markAsUntouched();
@@ -565,24 +609,111 @@ export class LoginComponent implements OnInit, OnDestroy {
    * Continue button clicked (or enter key pressed).
    * Adds the login url to the browser's history so that the back button can be used to go back to the email entry state.
    * Needs to be separate from the continue() function because that can be triggered by the browser's forward button.
+   * @param mpEntryLayoutOverride Optional override for the default MP-entry anon-layout. Used by
+   * client-specific flows (e.g. SSO invited-user redirect) that need a different title/subtitle/icon.
    */
-  protected async continuePressed() {
+  protected async continuePressed(mpEntryLayoutOverride?: Partial<AnonLayoutWrapperData>) {
     // Add a new entry to the browser's history so that there is a history entry to go back to
     history.pushState({}, "", window.location.href);
-    await this.continue();
+    await this.continue(mpEntryLayoutOverride);
   }
 
   /**
    * Continue to the master password entry state (only if email is validated)
+   * @param mpEntryLayoutOverride See {@link continuePressed}.
    */
-  protected async continue(): Promise<void> {
+  protected async continue(mpEntryLayoutOverride?: Partial<AnonLayoutWrapperData>): Promise<void> {
     const isEmailValid = this.validateEmail();
-
-    if (isEmailValid) {
-      this.prefetchPasswordPreloginData();
-
-      await this.toggleLoginUiState(LoginUiState.MASTER_PASSWORD_ENTRY);
+    if (!isEmailValid) {
+      return;
     }
+
+    const email = this.emailFormControl.value;
+    if (email && !(await this.openOrgInviteDomainAllowed(email))) {
+      return;
+    }
+
+    // SSO-callback overrides (currently direct-invite only) take precedence; otherwise
+    // synthesize an override for the open-org-invite path so "Join <org>" survives the
+    // transition. Falls through to toggleLoginUiState's built-in default when neither
+    // applies.
+    const override = mpEntryLayoutOverride ?? (await this.buildOpenOrgInviteMpEntryOverride());
+
+    this.prefetchPasswordPreloginData();
+    await this.toggleLoginUiState(LoginUiState.MASTER_PASSWORD_ENTRY, override);
+  }
+
+  /**
+   * Pre-auth UX check for open-org-invite domain restrictions. Layered UX only — the
+   * accept endpoint enforces the policy server-side, so this fails open on transient
+   * errors (returns true) rather than blocking login. Also returns true when no
+   * open-org invite is stashed.
+   */
+  private async openOrgInviteDomainAllowed(email: string): Promise<boolean> {
+    const invite = await this.organizationInviteService.getOpenOrgInvite();
+    if (invite == null) {
+      return true;
+    }
+    const result = await this.organizationInviteService.validateOpenOrgInviteEmailDomain(
+      invite.organizationId,
+      invite.inviteLinkCode,
+      email,
+    );
+    switch (result.kind) {
+      case "allowed":
+        return true;
+      case "not-allowed":
+        this.emailFormControl.setErrors({
+          error: { message: this.i18nService.t("openOrgInviteEmailDomainNotAllowed") },
+        });
+        return false;
+      case "link-invalid":
+        await this.organizationInviteService.clearOpenOrgInvite();
+        await this.router.navigate(["/organization-invite-link-invalid"], {
+          queryParams: { orgName: invite.organizationName, returnTo: "login" },
+        });
+        return false;
+      case "unexpected":
+        this.validationService.showError(result.errorMessage);
+        return true;
+    }
+  }
+
+  /**
+   * Pushes the "Join <organizationName>" title for the email-entry surface when an
+   * open org invite is in state. The override is the last write to the anon-layout
+   * wrapper data on this surface, so it survives until the next state transition
+   * (which is expected to re-apply it where needed — see `toggleLoginUiState`).
+   */
+  private async applyOpenOrgInviteTitleOverride(): Promise<void> {
+    const invite = await this.organizationInviteService.getOpenOrgInvite();
+    if (invite == null) {
+      return;
+    }
+    this.anonLayoutWrapperDataService.setAnonLayoutWrapperData({
+      pageTitle: { key: "joinOrganizationName", placeholders: [invite.organizationName] },
+    });
+  }
+
+  /**
+   * Builds the MP-entry anon-layout override for the open-org-invite path: preserves
+   * "Join <org>" title, surfaces the entered email as subtitle (matching the default
+   * MP-entry treatment), and swaps the icon to LockIcon. Returns undefined when no
+   * open org invite is in state or the feature is disabled, so the caller can fall
+   * through to the default override path.
+   */
+  private async buildOpenOrgInviteMpEntryOverride(): Promise<
+    Partial<AnonLayoutWrapperData> | undefined
+  > {
+    const invite = await this.organizationInviteService.getOpenOrgInvite();
+    if (invite == null) {
+      return undefined;
+    }
+    return {
+      pageTitle: { key: "joinOrganizationName", placeholders: [invite.organizationName] },
+      pageSubtitle: this.emailFormControl.value,
+      pageIcon: this.Icons.LockIcon,
+    };
   }
 
   /**

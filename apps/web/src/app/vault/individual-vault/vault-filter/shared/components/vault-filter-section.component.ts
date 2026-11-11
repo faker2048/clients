@@ -14,9 +14,8 @@ import {
   VaultFilterSection,
   VaultFilterType,
   VaultFilter,
+  CoachmarkService,
 } from "@bitwarden/vault";
-
-import { CoachmarkService } from "../../../../components/coachmark";
 
 // FIXME(https://bitwarden.atlassian.net/browse/CL-764): Migrate to OnPush
 // eslint-disable-next-line @angular-eslint/prefer-on-push-component-change-detection
@@ -51,6 +50,24 @@ export class VaultFilterSectionComponent {
     initialValue: new Set<string>(),
   });
 
+  protected readonly headerNode = computed(() => this.data()!);
+  protected readonly headerInfo = computed(() => this.section().header);
+  protected readonly filters = computed(() => this.data()?.children);
+  protected readonly isOrganizationFilter = computed(
+    () => this.data()?.node instanceof Organization,
+  );
+  protected readonly isAllVaultsSelected = computed(
+    () => this.isOrganizationFilter() && !this.activeFilter.selectedOrganizationNode,
+  );
+  protected readonly editInfo = computed(() => this.section().edit);
+  protected readonly addInfo = computed(() => this.section().add);
+  protected readonly showAddLink = computed(() => !!this.section().add?.route);
+  protected readonly optionsInfo = computed(() => this.section().options);
+  protected readonly premiumFeature = computed(
+    () => this.section().premiumOptions?.showBadgeForNonPremium,
+  );
+  protected readonly divider = computed(() => this.section().divider);
+
   private injectors = new Map<string, Injector>();
 
   constructor(
@@ -58,26 +75,6 @@ export class VaultFilterSectionComponent {
     private injector: Injector,
     private accountService: AccountService,
   ) {}
-
-  get headerNode() {
-    return this.data()!;
-  }
-
-  get headerInfo() {
-    return this.section().header;
-  }
-
-  get filters() {
-    return this.data()?.children;
-  }
-
-  get isOrganizationFilter() {
-    return this.data()?.node instanceof Organization;
-  }
-
-  get isAllVaultsSelected() {
-    return this.isOrganizationFilter && !this.activeFilter.selectedOrganizationNode;
-  }
 
   isNodeSelected(filterNode: TreeNode<VaultFilterType>) {
     const { organizationId, cipherTypeId, folderId, collectionId, isCollectionSelected } =
@@ -104,36 +101,12 @@ export class VaultFilterSectionComponent {
     await this.section().action(filterNode);
   }
 
-  get editInfo() {
-    return this.section().edit;
-  }
-
   onEdit(filterNode: TreeNode<VaultFilterType>) {
     this.section().edit?.action(filterNode.node);
   }
 
-  get addInfo() {
-    return this.section().add;
-  }
-
-  get showAddLink() {
-    return this.section().add && this.section().add.route;
-  }
-
   async onAdd() {
     this.section().add?.action();
-  }
-
-  get optionsInfo() {
-    return this.section().options;
-  }
-
-  get premiumFeature() {
-    return this.section().premiumOptions?.showBadgeForNonPremium;
-  }
-
-  get divider() {
-    return this.section().divider;
   }
 
   isCollapsed(node: ITreeNodeObject) {

@@ -10,6 +10,7 @@ import {
   mergeMap,
   Subject,
   switchMap,
+  take,
   takeUntil,
   tap,
 } from "rxjs";
@@ -32,6 +33,7 @@ import { MessagingService } from "@bitwarden/common/platform/abstractions/messag
 import { PlatformUtilsService } from "@bitwarden/common/platform/abstractions/platform-utils.service";
 import { SyncService } from "@bitwarden/common/platform/sync";
 import { PasswordStrengthServiceAbstraction } from "@bitwarden/common/tools/password-strength";
+import { UserId } from "@bitwarden/common/types/guid";
 import { UserKey } from "@bitwarden/common/types/key";
 import {
   TooltipDirective,
@@ -50,7 +52,8 @@ import {
   BiometricsStatus,
   UserAsymmetricKeysRegenerationService,
 } from "@bitwarden/key-management";
-import { UnlockService } from "@bitwarden/unlock";
+import { measured, PerfTrackGroup } from "@bitwarden/logging";
+import { UnlockMethod, UnlockService } from "@bitwarden/unlock";
 
 import {
   UnlockOption,
@@ -80,6 +83,9 @@ type AfterUnlockActions = {
 /// Fixes safari autoprompt behavior
 const AUTOPROMPT_BIOMETRICS_PROCESS_RELOAD_DELAY = 5000;
 
+const PERF_TRACK_GROUP = PerfTrackGroup.Unlock;
+const PERF_TRACK = "Lock Component";
+
 const BIOMETRIC_UNLOCK_TEMPORARY_UNAVAILABLE_STATUSES = [
   BiometricsStatus.HardwareUnavailable,
   BiometricsStatus.DesktopDisconnected,
@@ -106,6 +112,7 @@ const BIOMETRIC_UNLOCK_TEMPORARY_UNAVAILABLE_STATUSES = [
 })
 export class LockComponent implements OnInit, OnDestroy {
   private destroy$ = new Subject<void>();
+  private activeAccountChange$ = new Subject<void>();
   protected loading = true;
 
   activeAccount: Account | null = null;
@@ -215,7 +222,7 @@ export class LockComponent implements OnInit, OnDestroy {
             } else if (!prevBiometricsEnabled && this.unlockOptions?.biometrics.enabled) {
               await this.setDefaultActiveUnlockOption(this.unlockOptions);
               if (this.activeUnlockOption === UnlockOption.Biometrics) {
-                await this.handleBiometricsUnlockEnabled();
+                await this.handleBiometricsUnlockEnabled(this.activeAccount.id);
               }
             }
           }
@@ -284,19 +291,38 @@ export class LockComponent implements OnInit, OnDestroy {
       if (!canUseBiometrics) {
         // User has no available unlock options, force logout. This happens for TDE users without a masterpassword, that don't have a persistent unlock method set.
         this.logService.warning("[LockComponent] User cannot unlock again. Logging out!");
-        await this.logoutService.logout(activeAccount.id);
+        await this.logoutService.logout(activeAccount.id, "noUnlockOptionsAvailable");
         return;
       }
     }
 
     await this.setDefaultActiveUnlockOption(this.unlockOptions);
 
+    // Every unlock of this user continues from here, except
+    // for master password, as a policy evaluation has to be run
+    this.unlockService.unlocked$
+      .pipe(
+        filter(
+          (unlock) =>
+            unlock.userId === activeAccount.id && unlock.method !== UnlockMethod.MasterPassword,
+        ),
+        take(1),
+        takeUntil(this.activeAccountChange$),
+        takeUntil(this.destroy$),
+      )
+      .subscribe(() => {
+        this.ngZone.run((): void => {
+          void this.continueAfterSettingUserKey();
+        });
+      });
+
     if (this.unlockOptions?.biometrics.enabled) {
-      await this.handleBiometricsUnlockEnabled();
+      await this.handleBiometricsUnlockEnabled(activeAccount.id);
     }
   }
 
   private resetDataOnActiveAccountChange() {
+    this.activeAccountChange$.next();
     this.defaultUnlockOptionSetForUser = false;
     this.unlockOptions = null;
     this.activeUnlockOption = null;
@@ -332,11 +358,11 @@ export class LockComponent implements OnInit, OnDestroy {
     }
   }
 
-  private async handleBiometricsUnlockEnabled() {
+  private async handleBiometricsUnlockEnabled(userId: UserId) {
     this.biometricUnlockBtnText = this.lockComponentService.getBiometricsUnlockBtnText();
 
     const autoPromptBiometrics = await firstValueFrom(
-      this.biometricStateService.promptAutomatically$,
+      this.biometricStateService.promptAutomatically$(userId),
     );
 
     // TODO: PM-12546 - we need to make our biometric autoprompt experience consistent between the
@@ -344,7 +370,7 @@ export class LockComponent implements OnInit, OnDestroy {
     if (this.clientType === "desktop") {
       if (autoPromptBiometrics) {
         this.loading = false;
-        await this.desktopAutoPromptBiometrics();
+        await this.desktopAutoPromptBiometrics(userId);
       }
     }
 
@@ -399,7 +425,7 @@ export class LockComponent implements OnInit, OnDestroy {
     });
 
     if (confirmed && this.activeAccount != null) {
-      await this.logoutService.logout(this.activeAccount.id);
+      await this.logoutService.logout(this.activeAccount.id, "userInitiated");
       // navigate to root so redirect guard can properly route next active user or null user to correct page
       await this.router.navigate(["/"]);
     }
@@ -421,58 +447,28 @@ export class LockComponent implements OnInit, OnDestroy {
         return;
       }
 
-      await this.biometricStateService.setUserPromptCancelled();
+      await this.biometricStateService.setUserPromptCancelled(this.activeAccount.id);
 
+      // Throws if the user cancels the biometric prompt.
       await this.unlockService.unlockWithBiometrics(this.activeAccount.id);
-      const userKey = await firstValueFrom(this.keyService.userKey$(this.activeAccount.id));
-
-      // If user cancels biometric prompt, userKey is undefined.
-      if (userKey) {
-        await this.setUserKeyAndContinue(userKey);
-      }
     } catch (e) {
-      // Cancelling is a valid action.
-      if (e instanceof Error && e.message === "canceled") {
-        return;
-      }
-
-      this.logService.error("[LockComponent] Failed to unlock via biometrics.", e);
-
-      let biometricTranslatedErrorDesc;
-
-      if (this.clientType === "browser") {
-        const biometricErrorDescTranslationKey = this.lockComponentService.getBiometricsError(e);
-
-        if (biometricErrorDescTranslationKey) {
-          biometricTranslatedErrorDesc = this.i18nService.t(biometricErrorDescTranslationKey);
-        }
-      }
-
-      // if no translation key found, show generic error message
-      if (!biometricTranslatedErrorDesc) {
-        biometricTranslatedErrorDesc = this.i18nService.t("unexpectedError");
-      }
-
-      const confirmed = await this.dialogService.openSimpleDialog({
-        title: { key: "error" },
-        content: biometricTranslatedErrorDesc,
-        acceptButtonText: { key: "tryAgain" },
-        type: "danger",
-      });
-
-      if (confirmed) {
-        // try again
-        this.unlockingViaBiometrics = false;
-        await this.unlockViaBiometrics();
-        return;
-      }
+      // Biometrics may fail if the user does not accept or if the desktop app is disconnected.
+      this.logService.info("[LockComponent] Failed to unlock via biometrics.", e);
     } finally {
       this.unlockingViaBiometrics = false;
     }
   }
 
   async onPrfUnlockSuccess(userKey: UserKey): Promise<void> {
-    await this.setUserKeyAndContinue(userKey);
+    if (this.activeAccount == null) {
+      throw new Error("No active user.");
+    }
+
+    await this.unlockService.unlockWithDecryptedUserKey(
+      this.activeAccount.id,
+      userKey,
+      UnlockMethod.Prf,
+    );
   }
 
   togglePassword() {
@@ -503,8 +499,6 @@ export class LockComponent implements OnInit, OnDestroy {
 
     try {
       await this.unlockService.unlockWithPin(this.activeAccount.id, pin);
-      const userKey = await this.keyService.getUserKey(this.activeAccount.id);
-      await this.setUserKeyAndContinue(userKey!);
     } catch {
       // Failure state: invalid PIN or failed decryption
       this.invalidPinAttempts++;
@@ -515,7 +509,7 @@ export class LockComponent implements OnInit, OnDestroy {
           variant: "error",
           message: this.i18nService.t("tooManyInvalidPinEntryAttemptsLoggingOut"),
         });
-        this.messagingService.send("logout");
+        await this.logoutService.logout(this.activeAccount.id, "tooManyInvalidPinAttempts");
         return;
       }
 
@@ -538,15 +532,20 @@ export class LockComponent implements OnInit, OnDestroy {
       return;
     }
 
-    await this.setUserKeyAndContinue(event.userKey, {
+    await this.continueAfterSettingUserKey({
       passwordEvaluation: {
         masterPassword: event.masterPassword,
       },
     });
   }
 
-  protected async setUserKeyAndContinue(
-    key: UserKey,
+  /**
+   * Shared tail of every unlock, run once the user key is set. Reached through
+   * {@link UnlockService.unlocked$} rather than called by each unlock method, so that an unlock
+   * performed elsewhere continues the same way as one performed here.
+   */
+  @measured(PERF_TRACK_GROUP, PERF_TRACK)
+  protected async continueAfterSettingUserKey(
     afterUnlockActions: AfterUnlockActions = {},
   ): Promise<void> {
     if (this.activeAccount == null) {
@@ -555,8 +554,6 @@ export class LockComponent implements OnInit, OnDestroy {
 
     // Add a mark to indicate that the user has unlocked their vault. A good starting point for measuring unlock performance.
     this.logService.mark("Vault unlocked");
-
-    await this.keyService.setUserKey(key, this.activeAccount.id);
 
     // Now that we have a decrypted user key in memory, we can check if we
     // need to establish trust on the current device
@@ -570,7 +567,7 @@ export class LockComponent implements OnInit, OnDestroy {
       throw new Error("No active user.");
     }
 
-    await this.biometricStateService.resetUserPromptCancelled();
+    await this.biometricStateService.resetUserPromptCancelled(this.activeAccount.id);
 
     try {
       await this.encryptedMigrator.runMigrations(
@@ -613,23 +610,15 @@ export class LockComponent implements OnInit, OnDestroy {
     }
 
     if (this.platformUtilsService.getClientType() == ClientType.Web) {
-      const startSync = performance.now();
-
       // Web does not cache vault data and would be in a unusable state when unlocked.
       await this.syncService.fullSync(true);
-
-      this.logService.measure(startSync, "KeyManagement", "LockComponent", "sync complete");
     } else {
       // On non-web clients, we start a sync in the background, but to not block by it
       void this.syncService.fullSync(false);
     }
 
-    const startRegeneration = new Date().getTime();
     // TODO: This should probably not be blocking
     await this.userAsymmetricKeysRegenerationService.regenerateIfNeeded(this.activeAccount.id);
-    this.logService.info(
-      `[LockComponent] Private key regeneration took ${new Date().getTime() - startRegeneration}ms`,
-    );
 
     if (this.clientType === "browser") {
       const previousUrl = this.lockComponentService.getPreviousUrl();
@@ -721,7 +710,7 @@ export class LockComponent implements OnInit, OnDestroy {
     this.messagingService.send("getWindowIsFocused");
   }
 
-  private async desktopAutoPromptBiometrics() {
+  private async desktopAutoPromptBiometrics(userId: UserId) {
     if (!this.unlockOptions?.biometrics?.enabled || this.biometricAsked) {
       return;
     }
@@ -731,7 +720,7 @@ export class LockComponent implements OnInit, OnDestroy {
     }
 
     // prevent the biometric prompt from showing if the user has already cancelled it
-    if (await firstValueFrom(this.biometricStateService.promptCancelled$)) {
+    if (await firstValueFrom(this.biometricStateService.promptCancelled$(userId))) {
       return;
     }
 
